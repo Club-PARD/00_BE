@@ -15,9 +15,9 @@ import java.util.UUID;
 
 public class User {
     @Id
-    @Column(columnDefinition = "BINARY(16)", updatable = false, nullable = false)
+    @Column(columnDefinition = "BINARY(16)", updatable = false, nullable = false, unique = true)
     private UUID id;
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String name;
 
     @Column(nullable = false, unique = true)

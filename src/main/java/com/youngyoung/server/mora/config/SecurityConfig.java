@@ -43,12 +43,18 @@ public class SecurityConfig {
 
                 // 사용자 정보 가져오는 서비스 설정
                 .userInfoEndpoint(userInfo -> userInfo.userService(principalOauth2UserService))
+
+                .failureHandler((request, response, exception) -> {
+                    System.out.println("🔥🔥 로그인 실패 이유 확인 🔥🔥");
+                    exception.printStackTrace(); // 콘솔에 빨간 에러 로그 전체 출력
+                    response.sendRedirect("/login?error");
+                })
         );
 
         //로그아웃
         http.logout(logout -> logout
                 .logoutUrl("/auth/google/logout")
-                .logoutSuccessUrl("http://localhost:3000")
+                .logoutSuccessUrl("http://192.168.0.182.nip.io:3000")
                 .invalidateHttpSession(true)
                 .deleteCookies("JSESSIONID")
         );
@@ -61,7 +67,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
+        configuration.setAllowedOrigins(Arrays.asList("http://192.168.0.182.nip.io:3000"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

@@ -58,15 +58,15 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         // 3) DB에서 최종 체크
         Optional<User> UserOptional = userRepo.findByEmail(email);
-
+        log.error("🔥🔥 SUCCESS HANDLER ENTERED 🔥🔥");
         if (UserOptional.isPresent()) {
             // 기존 회원 → 홈 이동
             log.info("기존 회원입니다. 홈으로 이동합니다.");
-            response.sendRedirect("http://localhost:3000/home");
+            response.sendRedirect("http://192.168.0.182.nip.io:3000/home");
         } else {
             // 신규 회원 → 회원가입 페이지 이동
             log.info("신규 회원입니다. 회원가입 페이지로 이동합니다.");
-            response.sendRedirect("http://localhost:3000/signup?User_email=" + email);
+            response.sendRedirect("http://192.168.0.182.nip.io:3000/signup?email=" + email);
         }
     }
 }
