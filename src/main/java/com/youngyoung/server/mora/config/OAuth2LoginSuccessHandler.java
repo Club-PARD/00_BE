@@ -1,11 +1,11 @@
 package com.youngyoung.server.mora.config;
 
-import com.youngyoung.server.mora.dto.SessionUser;
-import com.youngyoung.server.mora.entity.User;
+import com.youngyoung.server.mora.dto.SessionUser; // SessionUser 임포트 필수!
 import com.youngyoung.server.mora.repo.UserRepo;
-import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -14,59 +14,77 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.Optional;
-import java.util.UUID;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepo userRepo;
 
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request,
-                                        HttpServletResponse response,
-                                        Authentication authentication)
-            throws IOException, ServletException {
+    public void onAuthenticationSuccess(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Authentication authentication
+    ) throws IOException {
 
-        log.info("OAuth2 로그인 성공! DB 사용자 확인 시작...");
-
+        // 1. 로그인된 사용자 객체 가져오기
+        Object principal = authentication.getPrincipal();
+        boolean exists = false;
         String email = null;
 
-        // 1) 기존 회원이면 SessionUser로 로그인되며, email이 없음 → DB에서 다시 조회
-        if (authentication.getPrincipal() instanceof SessionUser sessionUser) {
-            UUID id = sessionUser.getId();
-            log.info("SessionUser 감지됨. ID로 DB에서 이메일 조회: {}", id);
-
-            User user = userRepo.findById(id);
-            if (user != null) {
-                email = user.getEmail();
-                log.info("DB에서 가져온 이메일: {}", email);
-            } else {
-                log.error("SessionUser ID가 DB에 존재하지 않음! 강제로 회원가입으로 이동");
-                response.sendRedirect("http://localhost:3000/signup");
-                return;
-            }
-
-        } else {
-            // 2) 신규 회원이면 OAuth2User 그대로 들어옴 → 구글 이메일 사용
-            OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+        // 🔥 여기가 핵심 수정 포인트!
+        if (principal instanceof SessionUser) {
+            // (1) SessionUser 타입이면 -> 이미 UserService에서 인증된 '기존 회원'임
+            log.info("✅ SessionUser 감지됨 -> 기존 회원으로 처리");
+            exists = true;
+        } else if (principal instanceof OAuth2User) {
+            // (2) 일반 OAuth2User 타입이면 -> '신규 회원'일 가능성 높음 (이메일로 확인)
+            OAuth2User oAuth2User = (OAuth2User) principal;
             email = oAuth2User.getAttribute("email");
-            log.info("OAuth2User 감지됨. 구글에서 받은 이메일: {}", email);
+
+            // 혹시 모르니 DB 한 번 더 확인 (안전장치)
+            if (email != null) {
+                exists = userRepo.findByEmail(email).isPresent();
+            }
         }
 
-        // 3) DB에서 최종 체크
-        Optional<User> UserOptional = userRepo.findByEmail(email);
-        log.error("🔥🔥 SUCCESS HANDLER ENTERED 🔥🔥");
-        if (UserOptional.isPresent()) {
-            // 기존 회원 → 홈 이동
-            log.info("기존 회원입니다. 홈으로 이동합니다.");
-            response.sendRedirect("http://192.168.0.182.nip.io:3000/home");
-        } else {
-            // 신규 회원 → 회원가입 페이지 이동
-            log.info("신규 회원입니다. 회원가입 페이지로 이동합니다.");
-            response.sendRedirect("http://192.168.0.182.nip.io:3000/signup?email=" + email);
+        // 2. 신규 회원일 때만 쿠키 굽기 (기존 회원은 쿠키 필요 없음)
+        if (!exists && email != null) {
+            Cookie emailCookie = new Cookie("oauth_email", email);
+            emailCookie.setPath("/");
+            emailCookie.setHttpOnly(false);
+            emailCookie.setMaxAge(60 * 5);
+            response.addCookie(emailCookie);
         }
+
+        // 3. 돌아갈 주소 찾기 (이전 코드와 동일)
+        String targetOrigin = "http://localhost:3000";
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            String referer = (String) session.getAttribute("PRE_LOGIN_REFERER");
+            if (referer != null) {
+                try {
+                    java.net.URI uri = new java.net.URI(referer);
+                    targetOrigin = uri.getScheme() + "://" + uri.getAuthority();
+                    session.removeAttribute("PRE_LOGIN_REFERER");
+                } catch (Exception e) { /* 무시 */ }
+            }
+        }
+
+        // 4. 경로 결정
+        String redirectPath;
+        if (exists) {
+            redirectPath = "/"; // 메인으로
+            log.info("🚀 기존 회원 -> 메인 페이지로 이동");
+        } else {
+            redirectPath = "/signup?email="+email; // 회원가입으로
+            log.info("✨ 신규 회원 -> 회원가입 페이지로 이동");
+        }
+
+        // 5. 리다이렉트
+        String finalUrl = targetOrigin + redirectPath;
+        response.sendRedirect(finalUrl);
     }
 }

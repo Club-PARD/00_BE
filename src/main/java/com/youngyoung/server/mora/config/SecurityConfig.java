@@ -6,74 +6,50 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 
-import java.util.Arrays;
+// ... imports ...
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final PrincipalOauth2UserService principalOauth2UserService;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final PrincipalOauth2UserService principalOauth2UserService;
+    private final RefererFilter refererFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        // 1. CSRF 해제
-        http.csrf(AbstractHttpConfigurer::disable);
 
-        // 2. CORS 설정 적용
-        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+        http
+                .csrf(csrf -> csrf.disable())
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
 
-        // 3. 권한 설정 (모든 요청 허용)
-        http.authorizeHttpRequests(au -> au
-                .anyRequest().permitAll()
-        );
+                .addFilterBefore(refererFilter, OAuth2AuthorizationRequestRedirectFilter.class)
 
-        // 4. OAuth2 로그인 설정
-        http.oauth2Login(oauth -> oauth
-                // ★ 핵심 수정: defaultSuccessUrl(...) 라인을 삭제했습니다.
-                // 성공 핸들러(oAuth2LoginSuccessHandler)에게 모든 리다이렉트 권한을 넘깁니다.
-                .successHandler(oAuth2LoginSuccessHandler)
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(
+                                "/",
+                                "/oauth2/**",
+                                "/login/**",
+                                // 👇 여기를 추가해주세요! (닉네임 체크 API 허용)
+                                "/user/**",      // /user로 시작하는 요청을 임시로 다 열거나,
+                                "/api/**"        // 혹은 /api/** 전체를 열어두는 것도 방법입니다.
+                        ).permitAll()
+                        .anyRequest().authenticated()
+                )
 
-                // 사용자 정보 가져오는 서비스 설정
-                .userInfoEndpoint(userInfo -> userInfo.userService(principalOauth2UserService))
-
-                .failureHandler((request, response, exception) -> {
-                    System.out.println("🔥🔥 로그인 실패 이유 확인 🔥🔥");
-                    exception.printStackTrace(); // 콘솔에 빨간 에러 로그 전체 출력
-                    response.sendRedirect("/login?error");
-                })
-        );
-
-        //로그아웃
-        http.logout(logout -> logout
-                .logoutUrl("/auth/google/logout")
-                .logoutSuccessUrl("http://192.168.0.182.nip.io:3000")
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID")
-        );
+                .oauth2Login(oauth -> oauth
+                        .userInfoEndpoint(userInfo ->
+                                userInfo.userService(principalOauth2UserService)
+                        )
+                        .successHandler(oAuth2LoginSuccessHandler)
+                );
 
         return http.build();
-    }
-
-    // CORS 설정 Bean
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-
-        configuration.setAllowedOrigins(Arrays.asList("http://192.168.0.182.nip.io:3000"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
     }
 }
