@@ -6,15 +6,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
+    // CorsConfig.java
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins(
-                        "http://192.168.0.182.nip.io:3000",
-                        "http://172.17.213.32.nip.io:3000", // 테스트 중인 IP 추가
-                        "http://localhost:3000"      // 로컬 테스트용
-                )
-                .allowedMethods("GET","POST","PATCH","DELETE")
+                .allowedOriginPatterns("*") // 🔥 allowedOrigins 대신 이거 써보세요 (모두 허용)
+                // .allowedOrigins(...) // 기존 코드 주석 처리
+                .allowedMethods("GET","POST","PATCH","DELETE","OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }

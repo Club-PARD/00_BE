@@ -40,15 +40,11 @@ public class Petition {
     @Column(nullable = false)
     private String negativeEx;
     @Column(nullable = false)
-    private Integer good;
+    private Integer good=0;
     @Column(nullable = false)
-    private Integer bad;
+    private Integer bad=0;
     @Column(nullable = false)
     private Integer allows;
-
-
-
-
 
     public long getId() {
         return id;
