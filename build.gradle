@@ -34,6 +34,7 @@ dependencies {
 
     // Web (Spring MVC, Tomcat 등 포함)
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.mysql:mysql-connector-j'
