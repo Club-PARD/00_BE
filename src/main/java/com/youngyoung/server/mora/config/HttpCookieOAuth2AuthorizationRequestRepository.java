@@ -43,14 +43,21 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
         cookie.setMaxAge(cookieExpireSeconds);
         response.addCookie(cookie);
 
-        // 🔥 수정: redirect_origin 파라미터가 있으면 쿠키에 저장
-        String redirectOrigin = request.getParameter(REDIRECT_ORIGIN_PARAM_COOKIE_NAME);
-        if (StringUtils.hasText(redirectOrigin)) {
-            Cookie redirectCookie = new Cookie(REDIRECT_ORIGIN_PARAM_COOKIE_NAME, redirectOrigin);
-            redirectCookie.setPath("/");
-            redirectCookie.setHttpOnly(true); // JS에서 못 건드리게
-            redirectCookie.setMaxAge(cookieExpireSeconds);
-            response.addCookie(redirectCookie);
+        // Referer 헤더에서 Origin을 추출하여 쿠키에 저장
+        String referer = request.getHeader("Referer");
+        if (StringUtils.hasText(referer)) {
+            try {
+                java.net.URI uri = new java.net.URI(referer);
+                String redirectOrigin = uri.getScheme() + "://" + uri.getAuthority();
+
+                Cookie redirectCookie = new Cookie(REDIRECT_ORIGIN_PARAM_COOKIE_NAME, redirectOrigin);
+                redirectCookie.setPath("/");
+                redirectCookie.setHttpOnly(true);
+                redirectCookie.setMaxAge(cookieExpireSeconds);
+                response.addCookie(redirectCookie);
+            } catch (java.net.URISyntaxException e) {
+                // Referer 파싱에 실패하면 아무것도 하지 않음
+            }
         }
     }
 

@@ -1,16 +1,16 @@
 package com.youngyoung.server.mora.config;
 
 import com.youngyoung.server.mora.dto.SessionUser;
+import com.youngyoung.server.mora.entity.User;
 import com.youngyoung.server.mora.repo.UserRepo;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -20,62 +20,52 @@ import java.util.Optional;
 @Slf4j
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
-    private final UserRepo userRepo;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
+    private final UserRepo userRepo; // DB 조회를 위해 UserRepo 주입
 
     @Override
+    @Transactional(readOnly = true)
     public void onAuthenticationSuccess(
             HttpServletRequest request,
             HttpServletResponse response,
             Authentication authentication
     ) throws IOException {
 
-        // 1. 로그인된 사용자 객체 가져오기
-        Object principal = authentication.getPrincipal();
-        boolean exists = false;
-        String email = null;
+        log.info("OAuth2 로그인 성공. Principal: {}", authentication.getPrincipal());
 
-        if (principal instanceof SessionUser) {
-            log.info("✅ SessionUser 감지됨 -> 기존 회원으로 처리");
-            exists = true;
-        } else if (principal instanceof OAuth2User) {
-            OAuth2User oAuth2User = (OAuth2User) principal;
-            email = oAuth2User.getAttribute("email");
+        // 1. 로그인된 사용자 정보 가져오기
+        SessionUser sessionUser = (SessionUser) authentication.getPrincipal();
+        Optional<User> userOptional = Optional.ofNullable(userRepo.findById(sessionUser.getId()));
 
-            if (email != null) {
-                exists = userRepo.findByEmail(email).isPresent();
-            }
+        if (userOptional.isEmpty()) {
+            throw new IllegalArgumentException("Invalid User ID:" + sessionUser.getId());
+        }
+        User user = userOptional.get();
+
+        // 2. 신규/기존 유저 판단 (age가 0이면 신규 유저로 간주)
+        boolean isNewUser = (user.getAge() == 0);
+
+        // 3. 리다이렉트 경로 분기
+        String redirectPath;
+        if (isNewUser) {
+            log.info("신규 가입 유저입니다. 추가 정보 입력 페이지로 리다이렉트합니다. User ID: {}", user.getId());
+            redirectPath = "/signup?email=" + user.getEmail();
+        } else {
+            log.info("기존 유저입니다. 메인 페이지로 리다이렉트합니다. User ID: {}", user.getId());
+            redirectPath = "/";
         }
 
-        // 2. 신규 회원일 때만 쿠키 굽기 (기존 회원은 쿠키 필요 없음)
-        if (!exists && email != null) {
-            Cookie emailCookie = new Cookie("oauth_email", email);
-            emailCookie.setPath("/");
-            emailCookie.setHttpOnly(false);
-            emailCookie.setMaxAge(60 * 5);
-            response.addCookie(emailCookie);
-        }
-
-        // 🔥 3. 돌아갈 주소 찾기 (쿠키에서 확인)
+        // 4. 돌아갈 주소(Origin) 찾기 (쿠키에서 확인)
         String targetOrigin = authorizationRequestRepository
                 .getRedirectOrigin(request)
-                .orElse("http://localhost:3000"); // 쿠키 없으면 localhost (비상용)
+                .orElse("http://localhost:3000"); // 쿠키 없으면 localhost (개발용)
 
         log.info("🔙 리다이렉트 타겟 Origin: {}", targetOrigin);
 
-
-        // 4. 경로 결정
-        String redirectPath;
-        if (exists) {
-            redirectPath = "/"; // 메인으로
-        } else {
-            redirectPath = "/signup?email=" + email; // 회원가입으로
-        }
-
-        // 🔥 5. 인증 과정에서 구운 임시 쿠키(state 정보, redirect_origin 등) 삭제
+        // 5. 인증 과정에서 사용된 임시 쿠키 삭제
         authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
 
-        // 6. 리다이렉트
+        // 6. 최종 목적지로 리다이렉트
         String finalUrl = targetOrigin + redirectPath;
         log.info("🚀 최종 리다이렉트 URL: {}", finalUrl);
         response.sendRedirect(finalUrl);

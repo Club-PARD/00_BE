@@ -10,6 +10,7 @@ import com.youngyoung.server.mora.repo.UserRepo;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -30,15 +31,21 @@ public class UserService {
         this.commentRepo = commentRepo;
     }
 
-    //signUp
+    // 이름은 signUp이지만 실제로는 사용자 정보 '수정'
+    @Transactional
     public Integer save(UserReq.UserInfo userInfo){
-        User user = User.builder()
-                .name(userInfo.getName())
-                .email(userInfo.getEmail())
-                .age(userInfo.getAge())
-                .status(userInfo.getStatus())
-                .build();
-        userRepo.save(user);
+        // 전달받은 이메일로 기존 사용자를 찾음
+        User user = userRepo.findByEmail(userInfo.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. email=" + userInfo.getEmail()));
+
+        // User 엔티티에 있는 업데이트 메소드를 사용해 정보 수정
+        user.updateNameAndStatusAndAge(
+                userInfo.getName(),
+                userInfo.getAge(),
+                userInfo.getStatus()
+        );
+
+        // @Transactional 어노테이션으로 인해 메소드가 종료될 때 변경된 내용이 자동으로 DB에 반영(UPDATE)됨
         return 0;
     }
 
