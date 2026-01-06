@@ -1,5 +1,6 @@
 package com.youngyoung.server.mora.controller;
 
+import com.nimbusds.openid.connect.sdk.claims.UserInfo;
 import com.youngyoung.server.mora.dto.SessionUser;
 import com.youngyoung.server.mora.dto.UserReq;
 import com.youngyoung.server.mora.dto.UserRes;
@@ -48,6 +49,26 @@ public class UserController {
         }
     }
 
+    //내정보 수정
+    @PatchMapping("")
+    public ResponseEntity<?> updateSetting(@AuthenticationPrincipal OAuth2User oAuth2User,
+                                           @RequestBody UserReq.UserUpdateInfo userUpdateInfo) {
+        try {
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                String email = userService.getUser(sessionUser.getId()).getEmail();
+                UserReq.UserInfo userInfo = new UserReq.UserInfo(userUpdateInfo.getName(),email, userUpdateInfo.getAge(),userUpdateInfo.getStatus());
+                userService.save(userInfo);
+                return ResponseEntity.ok(200);}
+            else{
+                return ResponseEntity.status(401).body("로그인 해주세요.");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
     //내정보 조회
     @GetMapping("/me")
     public ResponseEntity<?> mySetting(@AuthenticationPrincipal OAuth2User oAuth2User) {
@@ -66,23 +87,23 @@ public class UserController {
         }
     }
 
-    //스크랩 조회
-    @GetMapping("/scrap")
-    public ResponseEntity<?> myScrap(@AuthenticationPrincipal OAuth2User oAuth2User) {
-        try {
-            if (oAuth2User instanceof SessionUser) {
-                SessionUser sessionUser = (SessionUser) oAuth2User;
-                UUID myId = sessionUser.getId();
-                List<UserRes.ScrapInfo> result = userService.getScrap(myId);
-                return ResponseEntity.ok(result);}
-            else{
-                return ResponseEntity.status(401).body("로그인 해주세요.");
-            }
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(e.getMessage());
-        }
-    }
+//    //스크랩 조회
+//    @GetMapping("/scrap")
+//    public ResponseEntity<?> myScrap(@AuthenticationPrincipal OAuth2User oAuth2User) {
+//        try {
+//            if (oAuth2User instanceof SessionUser) {
+//                SessionUser sessionUser = (SessionUser) oAuth2User;
+//                UUID myId = sessionUser.getId();
+//                List<UserRes.ScrapInfo> result = userService.getScrap(myId);
+//                return ResponseEntity.ok(result);}
+//            else{
+//                return ResponseEntity.status(401).body("로그인 해주세요.");
+//            }
+//        } catch (RuntimeException e) {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+//                    .body(e.getMessage());
+//        }
+//    }
 
     //user 삭제
     @DeleteMapping("/delete")
@@ -96,6 +117,48 @@ public class UserController {
             else{
                 return ResponseEntity.status(401).body("로그인 해주세요.");
             }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+
+    //스크랩 조회
+    @GetMapping("/scrap")
+    public ResponseEntity<?> postComment(@AuthenticationPrincipal OAuth2User oAuth2User) {
+        try {
+            //id 확인
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+
+                List<UserRes.ScrapInfo> result = userService.getScrap(myId);
+                return ResponseEntity.ok(result);
+            }
+            return ResponseEntity.status(401).body("로그인 해주세요.");
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+    //스크랩 삭제
+    @DeleteMapping("/scrap")
+    public ResponseEntity<?> postComment(@AuthenticationPrincipal OAuth2User oAuth2User,
+                                         @RequestBody List<Long> id) {
+        try {
+            //id 확인
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+
+                userService.deleteScraps(myId, id);
+                return ResponseEntity.ok(200);
+            }
+            return ResponseEntity.status(401).body("로그인 해주세요.");
+
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(e.getMessage());

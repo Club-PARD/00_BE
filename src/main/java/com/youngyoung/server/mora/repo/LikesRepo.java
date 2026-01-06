@@ -9,4 +9,6 @@ import java.util.UUID;
 @Repository
 public interface LikesRepo extends JpaRepository<Likes, Long> {
     void deleteByUserId(UUID myId);
+
+    Likes findByPetIdAndUserId(Long id, UUID myId);
 }

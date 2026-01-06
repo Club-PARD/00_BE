@@ -5,7 +5,9 @@ import com.youngyoung.server.mora.dto.PetitionRes;
 import com.youngyoung.server.mora.entity.Comment;
 import com.youngyoung.server.mora.entity.Likes;
 import com.youngyoung.server.mora.entity.Petition;
+import com.youngyoung.server.mora.entity.Scrap;
 import com.youngyoung.server.mora.repo.*;
+import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.domain.Sort;
@@ -26,13 +28,15 @@ public class PetitionService {
     private final LawsRepo lawsRepo;
     private final LikesRepo likesRepo;
     private final CommentRepo commentRepo;
+    private final ScrapRepo scrapRepo;
 
-    public PetitionService(PetitionRepo petitionRepo, NewsRepo newsRepo, LawsRepo lawsRepo, LikesRepo likesRepo, CommentRepo commentRepo) {
+    public PetitionService(PetitionRepo petitionRepo, NewsRepo newsRepo, LawsRepo lawsRepo, LikesRepo likesRepo, CommentRepo commentRepo, ScrapRepo scrapRepo) {
         this.petitionRepo = petitionRepo;
         this.newsRepo = newsRepo;
         this.lawsRepo = lawsRepo;
         this.likesRepo = likesRepo;
         this.commentRepo = commentRepo;
+        this.scrapRepo = scrapRepo;
     }
 
     //petition post
@@ -108,20 +112,24 @@ public class PetitionService {
         return result;
     }
 
-    public Integer postLike(PetitionReq.LikeInfo ans) {
+    public Integer postLike(PetitionReq.LikeInfo ans, UUID myId) {
         Likes likes = Likes.builder()
-                .id(ans.getId())
+                .petId(ans.getId())
+                .userId(myId)
                 .likes(ans.getLikes())
                 .build();
         likesRepo.save(likes);
         return 0;
     }
-    //좋아요나 싫어요 누르면?
-//    public Integer updateLike(PetitionReq.LikeInfo ans) {
-//        Petition petition = petitionRepo.findById(Math.toIntExact(ans.getId()));
-//        petition.updateLikes(ans.getLikes());
-//        return 0;
-//    }
+
+    //좋아요 <-> 싫어요 교차 누름 (기존 like를 보냄)
+    @Transactional
+    public Integer updateLike(Likes likes) {
+        Petition petition = petitionRepo.findById(likes.getPetId());
+        petition.updateLikes(likes.getLikes());
+        likes.updateLikes(likes.getLikes());
+        return 0;
+    }
 
     public Integer getLike(Long id) {
         Optional<Likes> likes = likesRepo.findById(id);
@@ -151,5 +159,21 @@ public class PetitionService {
             return 0;
         }
         else{return 1;}
+    }
+
+    public Likes findLike(PetitionReq.LikeInfo ans, UUID myId) {
+        return likesRepo.findByPetIdAndUserId(ans.getId(),myId);
+    }
+
+    public void deleteLike(Likes result) {
+        likesRepo.delete(result);
+    }
+
+    public void postScrap(UUID myId, Long id) {
+        Scrap scrap = Scrap.builder()
+                .petId(id)
+                .userId(myId)
+                .build();
+        scrapRepo.save(scrap);
     }
 }

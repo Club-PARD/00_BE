@@ -22,4 +22,8 @@ public class Likes {
     private UUID userId;
     @Column(nullable = false)
     private Integer likes;
+
+    public void updateLikes(Integer likes) {
+        this.likes = -likes;
+    }
 }

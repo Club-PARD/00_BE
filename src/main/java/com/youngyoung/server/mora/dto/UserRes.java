@@ -3,6 +3,8 @@ package com.youngyoung.server.mora.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 public class UserRes {
     @Builder
     @Getter
@@ -27,5 +29,8 @@ public class UserRes {
     public static class ScrapInfo{
         private Long petId;
         private String title;
+        private Integer status;
+        private LocalDateTime voteStartDate;
+        private LocalDateTime voteEndDate;
     }
 }

@@ -10,10 +10,13 @@ import java.util.UUID;
 
 public interface ScrapRepo extends JpaRepository<Scrap,Long> {
     @Query("SELECT new com.youngyoung.server.mora.dto.UserRes$ScrapInfo(" +
-            "s.petId, p.title ) "+
+            "s.petId, p.title, p.status, p.voteStartDate, p.voteEndDate ) "+
             "FROM Scrap s JOIN Petition p ON p.id = s.petId " +
             "WHERE s.userId = :myId")
     List<UserRes.ScrapInfo> findByUserId(UUID myId);
 
     void deleteByUserId(UUID myId);
+
+    @Query("DELETE FROM Scrap s WHERE s.userId = :myId AND s.petId IN :id")
+    void deleteByUserIdAndPetId(UUID myId, List<Long> id);
 }

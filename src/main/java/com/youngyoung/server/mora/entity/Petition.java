@@ -53,7 +53,11 @@ public class Petition {
     }
 
     public void updateLikes(Integer likes) {
-        if(likes>0) this.good += likes;
-        else this.bad -= likes;
+        if(likes>0){ this.good -= likes;
+        this.bad -= likes;
+        }else{
+            this.good += likes;
+            this.bad += likes;
+        }
     }
 }

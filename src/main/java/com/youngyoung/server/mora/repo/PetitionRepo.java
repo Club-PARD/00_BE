@@ -48,4 +48,6 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
             "FROM Petition p WHERE "+
             "p.id =:id")
     PetitionRes.PetitionInfo findByPetId(Long id);
+
+    Petition findById(Long petId);
 }

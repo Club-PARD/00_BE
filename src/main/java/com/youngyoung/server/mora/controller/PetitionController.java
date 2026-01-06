@@ -3,6 +3,7 @@ package com.youngyoung.server.mora.controller;
 import com.youngyoung.server.mora.dto.PetitionReq;
 import com.youngyoung.server.mora.dto.PetitionRes;
 import com.youngyoung.server.mora.dto.SessionUser;
+import com.youngyoung.server.mora.entity.Likes;
 import com.youngyoung.server.mora.entity.User;
 import com.youngyoung.server.mora.service.PetitionService;
 import jakarta.transaction.Transactional;
@@ -92,30 +93,32 @@ public class PetitionController {
     }
 
     //like 처리(같은 거 한 번 더 누르면 삭제) / 로그인 됐는지 확인해야함
-//    @Transactional
-//    @PostMapping("/likes")
-//    public ResponseEntity<?> postLike(@AuthenticationPrincipal OAuth2User oAuth2User,
-//                                      @RequestBody PetitionReq.LikeInfo ans) {
-//        try {
-//            //id 확인
-//            if (oAuth2User instanceof SessionUser) {
-//                SessionUser sessionUser = (SessionUser) oAuth2User;
-//                UUID myId = sessionUser.getId();
-//                Integer result = petitionService.postLike(ans);
-//                // 1이면 취소, 0이면
-//                if(result == 1){
-//                    PetitionReq.LikeInfo newLike = new PetitionReq.LikeInfo(ans.getId(), -ans.getLikes());
-//                    petitionService.updateLike(newLike);
-//                }else petitionService.updateLike(ans);
-//                return ResponseEntity.ok(200);
-//            }
-//            return ResponseEntity.status(401).body("로그인 해주세요.");
-//
-//        } catch (RuntimeException e) {
-//            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-//                    .body(e.getMessage());
-//        }
-//    }
+    @Transactional
+    @PostMapping("/likes")
+    public ResponseEntity<?> postLike(@AuthenticationPrincipal OAuth2User oAuth2User,
+                                      @RequestBody PetitionReq.LikeInfo ans) {
+        try {
+            //id 확인
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+                Likes result = petitionService.findLike(ans, myId);
+                // result가 null이 아니면 전적 있음
+                if(result != null){
+                    if(result.getLikes() == ans.getLikes()){
+                        petitionService.deleteLike(result);
+                    }
+                    else petitionService.updateLike(result);
+                }else petitionService.postLike(ans, myId);
+                return ResponseEntity.ok(200);
+            }
+            return ResponseEntity.status(401).body("로그인 해주세요.");
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
 
     //내가 게시물에 뭘 눌렀는지
     @GetMapping("/likes/{id}")
@@ -196,4 +199,25 @@ public class PetitionController {
                     .body(e.getMessage());
         }
     }
+    //스크랩 등록
+    @PostMapping("/scrap/{id}")
+    public ResponseEntity<?> postComment(@AuthenticationPrincipal OAuth2User oAuth2User,
+                                         @PathVariable Long id) {
+        try {
+            //id 확인
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+
+                petitionService.postScrap(myId, id);
+                return ResponseEntity.ok(200);
+            }
+            return ResponseEntity.status(401).body("로그인 해주세요.");
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
 }

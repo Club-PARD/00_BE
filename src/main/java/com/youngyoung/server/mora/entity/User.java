@@ -43,7 +43,7 @@ public class User {
         return email;
     }
 
-    public void  updateNameAndStatusAndAge(String newName, Integer newAge, Integer newStatus)
+    public void  updateUser(String newName, Integer newAge, Integer newStatus)
     {
         this.name= newName;
         this.age = newAge;

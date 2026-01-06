@@ -31,7 +31,7 @@ public class UserService {
         this.commentRepo = commentRepo;
     }
 
-    // 이름은 signUp이지만 실제로는 사용자 정보 '수정'
+    // 이름은 signUp이지만 실제로는 사용자 정보 수정
     @Transactional
     public Integer save(UserReq.UserInfo userInfo){
         // 전달받은 이메일로 기존 사용자를 찾음
@@ -39,7 +39,7 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. email=" + userInfo.getEmail()));
 
         // User 엔티티에 있는 업데이트 메소드를 사용해 정보 수정
-        user.updateNameAndStatusAndAge(
+        user.updateUser(
                 userInfo.getName(),
                 userInfo.getAge(),
                 userInfo.getStatus()
@@ -67,5 +67,9 @@ public class UserService {
         scrapRepo.deleteByUserId(myId);
         commentRepo.deleteByUserId(myId);
         userRepo.deleteById(myId);
+    }
+
+    public void deleteScraps(UUID myId, List<Long> id) {
+        scrapRepo.deleteByUserIdAndPetId(myId, id);
     }
 }

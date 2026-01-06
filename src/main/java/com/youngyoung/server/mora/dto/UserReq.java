@@ -19,4 +19,17 @@ public class UserReq {
         @JsonProperty("status")
         private Integer status;
     }
+    @Builder
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class UserUpdateInfo{
+        @JsonProperty("name")
+        private String name;
+        @JsonProperty("age")
+        private Integer age;
+        @JsonProperty("status")
+        private Integer status;
+    }
 }
