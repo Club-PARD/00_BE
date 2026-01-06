@@ -1,11 +1,10 @@
 package com.youngyoung.server.mora.config;
 
-import com.youngyoung.server.mora.dto.SessionUser; // SessionUser 임포트 필수!
+import com.youngyoung.server.mora.dto.SessionUser;
 import com.youngyoung.server.mora.repo.UserRepo;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -14,6 +13,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -21,6 +21,7 @@ import java.io.IOException;
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepo userRepo;
+    private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
 
     @Override
     public void onAuthenticationSuccess(
@@ -34,17 +35,13 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         boolean exists = false;
         String email = null;
 
-        // 🔥 여기가 핵심 수정 포인트!
         if (principal instanceof SessionUser) {
-            // (1) SessionUser 타입이면 -> 이미 UserService에서 인증된 '기존 회원'임
             log.info("✅ SessionUser 감지됨 -> 기존 회원으로 처리");
             exists = true;
         } else if (principal instanceof OAuth2User) {
-            // (2) 일반 OAuth2User 타입이면 -> '신규 회원'일 가능성 높음 (이메일로 확인)
             OAuth2User oAuth2User = (OAuth2User) principal;
             email = oAuth2User.getAttribute("email");
 
-            // 혹시 모르니 DB 한 번 더 확인 (안전장치)
             if (email != null) {
                 exists = userRepo.findByEmail(email).isPresent();
             }
@@ -59,32 +56,28 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             response.addCookie(emailCookie);
         }
 
-        // 3. 돌아갈 주소 찾기 (이전 코드와 동일)
-        String targetOrigin = "http://localhost:3000";
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            String referer = (String) session.getAttribute("PRE_LOGIN_REFERER");
-            if (referer != null) {
-                try {
-                    java.net.URI uri = new java.net.URI(referer);
-                    targetOrigin = uri.getScheme() + "://" + uri.getAuthority();
-                    session.removeAttribute("PRE_LOGIN_REFERER");
-                } catch (Exception e) { /* 무시 */ }
-            }
-        }
+        // 🔥 3. 돌아갈 주소 찾기 (쿠키에서 확인)
+        String targetOrigin = authorizationRequestRepository
+                .getRedirectOrigin(request)
+                .orElse("http://localhost:3000"); // 쿠키 없으면 localhost (비상용)
+
+        log.info("🔙 리다이렉트 타겟 Origin: {}", targetOrigin);
+
 
         // 4. 경로 결정
         String redirectPath;
         if (exists) {
             redirectPath = "/"; // 메인으로
-            log.info("🚀 기존 회원 -> 메인 페이지로 이동");
         } else {
-            redirectPath = "/signup?email="+email; // 회원가입으로
-            log.info("✨ 신규 회원 -> 회원가입 페이지로 이동");
+            redirectPath = "/signup?email=" + email; // 회원가입으로
         }
 
-        // 5. 리다이렉트
+        // 🔥 5. 인증 과정에서 구운 임시 쿠키(state 정보, redirect_origin 등) 삭제
+        authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+
+        // 6. 리다이렉트
         String finalUrl = targetOrigin + redirectPath;
+        log.info("🚀 최종 리다이렉트 URL: {}", finalUrl);
         response.sendRedirect(finalUrl);
     }
 }

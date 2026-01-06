@@ -49,4 +49,9 @@ public class Petition {
     public long getId() {
         return id;
     }
+
+    public void updateLikes(Integer likes) {
+        if(likes>0) this.good += likes;
+        else this.bad -= likes;
+    }
 }

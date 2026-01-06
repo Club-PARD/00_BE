@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Entity
 @Getter
 @Builder
@@ -18,7 +20,9 @@ public class Comment {
     @Column(nullable = false)
     private Long petId;
     @Column(nullable = false)
-    private Long userId;
+    private UUID userId;
+    @Column(nullable = false)
+    private String userName;
     @Column(nullable = false)
     private String body;
 }

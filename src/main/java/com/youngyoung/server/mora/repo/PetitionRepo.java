@@ -20,10 +20,10 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
             "FROM Petition p WHERE " +
             "(:type IS NULL OR p.type = :type) AND " +
             "(:status IS NULL OR p.status = :status) AND " +
-            "(:category IS NULL OR p.category = :category) AND " +
+            "(:categories IS NULL OR p.category IN :categories) AND " +
             "(:keyWord IS NULL OR p.title LIKE %:keyWord%) " +
             "ORDER BY p.allows DESC LIMIT :limit OFFSET :offset")
-    List<PetitionRes.CardNewsInfo> findCardNewsPopular(Integer type, Integer status, String category, String keyWord, int limit, int offset);
+    List<PetitionRes.CardNewsInfo> findCardNewsPopular(Integer type, Integer status, List<String> categories, String keyWord, int limit, int offset);
 
     // 2. 최신순(vote_start_date DESC) + 필터링 + 페이징
     @Query("SELECT new com.youngyoung.server.mora.dto.PetitionRes$CardNewsInfo(" +
@@ -31,10 +31,10 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
             "FROM Petition p WHERE " +
             "(:type IS NULL OR p.type = :type) AND " +
             "(:status IS NULL OR p.status = :status) AND " +
-            "(:category IS NULL OR p.category = :category) AND " +
+            "(:categories IS NULL OR p.category IN :categories) AND " +
             "(:keyWord IS NULL OR p.title LIKE :keyWord) " +
             "ORDER BY p.voteStartDate DESC LIMIT :limit OFFSET :offset")
-    List<PetitionRes.CardNewsInfo> findCardNewsRecent(Integer type, Integer status, String category, String keyWord, int limit, int offset);
+    List<PetitionRes.CardNewsInfo> findCardNewsRecent(Integer type, Integer status, List<String> categories, String keyWord, int limit, int offset);
     // 3. 전체 개수 조회 (totalPages 계산용)
     @Query(value = "SELECT COUNT(*) FROM petition p WHERE " +
             "(:type IS NULL OR p.type = :type) AND " +
@@ -42,4 +42,10 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
             "(:category IS NULL OR p.category = :category) AND " +
             "(:keyWord IS NULL OR p.title LIKE :keyWord)", nativeQuery = true)
     Integer countFilteredPetitions(Integer type, Integer status, String category, String keyWord);
+
+    @Query("SELECT new com.youngyoung.server.mora.dto.PetitionRes$PetitionInfo(" +
+            "p.title, p.type, p.petitionSummary, p.status, p.category, p.voteStartDate, p.voteEndDate, p.result, p.positiveEx, p.negativeEx, p.good, p.bad, p.allows) " +
+            "FROM Petition p WHERE "+
+            "p.id =:id")
+    PetitionRes.PetitionInfo findByPetId(Long id);
 }

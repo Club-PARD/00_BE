@@ -6,11 +6,15 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+@Entity
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class LawsLink {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     @Column(nullable = false)
     private Long petId;
     @Column(nullable = false)

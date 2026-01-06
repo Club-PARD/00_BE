@@ -12,7 +12,7 @@ public class PetitionReq {
     @AllArgsConstructor
     @ToString
     public static class PetitionInfo{
-        private String id;
+        private Long id;
         private String title;
         private Integer type;
         private Integer status;
@@ -23,5 +23,23 @@ public class PetitionReq {
         private Integer totalPages;
         private Integer totalElements;
         private Integer allows;
+    }
+    @Builder
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class LikeInfo{
+        private Long id;
+        private Integer likes;
+    }
+    @Builder
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class CommentInfo{
+        private Long id;
+        private String body;
     }
 }
