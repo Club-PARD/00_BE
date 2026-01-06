@@ -10,8 +10,11 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns("*") // 🔥 allowedOrigins 대신 이거 써보세요 (모두 허용)
-                // .allowedOrigins(...) // 기존 코드 주석 처리
+                .allowedOrigins(
+                        "http://localhost:3000",
+                        "http://127.0.0.1:3000",
+                        "http://192.168.0.182.nip.io:3000" // 예시: 실제 프론트엔드 주소를 추가해야 합니다.
+                )
                 .allowedMethods("GET","POST","PATCH","DELETE","OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
