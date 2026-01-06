@@ -139,8 +139,8 @@ public class PetitionController {
         }
     }
 
-    //내가 게시물에 뭘 눌렀는지
-    @GetMapping("/comment")
+    //댓글 달기
+    @PostMapping("/comment")
     public ResponseEntity<?> postComment(@AuthenticationPrincipal OAuth2User oAuth2User,
                                       @RequestBody PetitionReq.CommentInfo comment) {
         try {
@@ -155,6 +155,42 @@ public class PetitionController {
             }
             return ResponseEntity.status(401).body("로그인 해주세요.");
 
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+    //댓글 불러오기 (id = petition_id)
+    @GetMapping("/comment/{id}")
+    public ResponseEntity<?> getComment(@AuthenticationPrincipal OAuth2User oAuth2User,
+                                        @PathVariable Long id) {
+        try {
+            UUID myId = null;
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                myId = sessionUser.getId();}
+                List<PetitionRes.CommentInfo> result = petitionService.getComment(myId, id);
+                return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+    //댓글 삭제 (id = comment_id)
+    @DeleteMapping("/comment/{id}")
+    public ResponseEntity<?> delelteComment(@AuthenticationPrincipal OAuth2User oAuth2User,
+                                        @PathVariable Long id) {
+        try {
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+            Integer result = petitionService.deleteComment(myId, id);
+            if(result == 0){return ResponseEntity.ok("완료");}else return ResponseEntity.status(402).body("해당 권한이 없습니다.");}
+            else{
+                return ResponseEntity.status(401).body("로그인 해주세요.");
+            }
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(e.getMessage());

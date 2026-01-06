@@ -138,4 +138,18 @@ public class PetitionService {
         commentRepo.save(newComment);
         return 0;
     }
+
+    public List<PetitionRes.CommentInfo> getComment(UUID myId, Long id) {
+        List<PetitionRes.CommentInfo> comments = commentRepo.findByPetId(myId, id);
+        return comments;
+    }
+
+    public Integer deleteComment(UUID myId, Long id) {
+        Comment comment  =  commentRepo.findById(id).get();
+        if(comment.getUserId() == myId){
+            commentRepo.delete(comment);
+            return 0;
+        }
+        else{return 1;}
+    }
 }

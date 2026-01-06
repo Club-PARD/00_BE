@@ -1,6 +1,7 @@
 package com.youngyoung.server.mora.service;
 
 import com.youngyoung.server.mora.dto.UserReq;
+import com.youngyoung.server.mora.dto.UserRes;
 import com.youngyoung.server.mora.entity.User;
 import com.youngyoung.server.mora.repo.UserRepo;
 import lombok.Getter;
@@ -34,5 +35,9 @@ public class UserService {
     public Integer check(String id) {
         if(userRepo.findById(UUID.fromString(id))==null) return 0;
         else return 1;
+    }
+
+    public UserRes.UserInfo getUser(UUID myId) {
+        return userRepo.findByIdFromFront(myId);
     }
 }

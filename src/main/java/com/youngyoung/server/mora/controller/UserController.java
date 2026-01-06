@@ -1,12 +1,19 @@
 package com.youngyoung.server.mora.controller;
 
+import com.youngyoung.server.mora.dto.SessionUser;
 import com.youngyoung.server.mora.dto.UserReq;
+import com.youngyoung.server.mora.dto.UserRes;
+import com.youngyoung.server.mora.entity.User;
 import com.youngyoung.server.mora.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -34,6 +41,23 @@ public class UserController {
             Integer check = userService.check(id);
             if (check == 1) return ResponseEntity.status(302).body("중복된 아이디");
             else return ResponseEntity.ok("사용 가능한 닉네임");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/user/me")
+    public ResponseEntity<?> mySetting(@AuthenticationPrincipal OAuth2User oAuth2User) {
+        try {
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+                UserRes.UserInfo result = userService.getUser(myId);
+                return ResponseEntity.ok(result);}
+            else{
+                return ResponseEntity.status(401).body("로그인 해주세요.");
+            }
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(e.getMessage());

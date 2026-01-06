@@ -72,4 +72,16 @@ public class PetitionRes {
         private String title;
         private String summary;
     }
+
+    @Builder
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class CommentInfo {
+        private Long id;
+        private String name;
+        private String body;
+        private Boolean check;
+    }
 }
