@@ -22,7 +22,5 @@ public class Comment {
     @Column(nullable = false)
     private UUID userId;
     @Column(nullable = false)
-    private String userName;
-    @Column(nullable = false)
     private String body;
 }

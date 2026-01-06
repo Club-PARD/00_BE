@@ -24,6 +24,8 @@ public class Petition {
     @Column(nullable = false)
     private Integer status;
     @Column(nullable = false)
+    private String petitionNeeds;
+    @Column(nullable = false)
     private String petitionSummary;
     @Column(nullable = false)
     private String result;

@@ -44,7 +44,7 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
     Integer countFilteredPetitions(Integer type, Integer status, String category, String keyWord);
 
     @Query("SELECT new com.youngyoung.server.mora.dto.PetitionRes$PetitionInfo(" +
-            "p.title, p.type, p.petitionSummary, p.status, p.category, p.voteStartDate, p.voteEndDate, p.result, p.positiveEx, p.negativeEx, p.good, p.bad, p.allows) " +
+            "p.title, p.type, p.petitionNeeds, p.petitionSummary, p.status, p.category, p.voteStartDate, p.voteEndDate, p.result, p.positiveEx, p.negativeEx, p.good, p.bad, p.allows) " +
             "FROM Petition p WHERE "+
             "p.id =:id")
     PetitionRes.PetitionInfo findByPetId(Long id);

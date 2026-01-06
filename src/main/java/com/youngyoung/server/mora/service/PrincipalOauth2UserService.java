@@ -38,8 +38,8 @@ public class PrincipalOauth2UserService
             log.info("기존 회원 OAuth 로그인: {}", email);
             User user = userOptional.get();
             // 필요 시 이름 등 정보 업데이트
-            // user.updateName(name); 
-            return new SessionUser(user.getId());
+            // user.updateName(name);
+            return new SessionUser(user.getId(), false);
         } else {
             log.info("신규 회원 OAuth 로그인: {}", email);
 
@@ -53,7 +53,7 @@ public class PrincipalOauth2UserService
             User savedUser = userRepo.save(newUser);
             log.info("신규 회원 저장 완료: {}", savedUser.getId());
 
-            return new SessionUser(savedUser.getId());
+            return new SessionUser(savedUser.getId(), true);
         }
     }
 }

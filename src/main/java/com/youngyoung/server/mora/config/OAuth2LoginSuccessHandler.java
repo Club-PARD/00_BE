@@ -35,23 +35,22 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         // 1. 로그인된 사용자 정보 가져오기
         SessionUser sessionUser = (SessionUser) authentication.getPrincipal();
-        Optional<User> userOptional = Optional.ofNullable(userRepo.findById(sessionUser.getId()));
-
-        if (userOptional.isEmpty()) {
-            throw new IllegalArgumentException("Invalid User ID:" + sessionUser.getId());
-        }
-        User user = userOptional.get();
-
-        // 2. 신규/기존 유저 판단 (age가 0이면 신규 유저로 간주)
-        boolean isNewUser = (user.getAge() == 0);
+        boolean isNewUser = sessionUser.isNew();
 
         // 3. 리다이렉트 경로 분기
         String redirectPath;
         if (isNewUser) {
+            Optional<User> userOptional = Optional.ofNullable(userRepo.findById(sessionUser.getId()));
+            if (userOptional.isEmpty()) {
+                throw new IllegalArgumentException("Invalid User ID:" + sessionUser.getId());
+            }
+            User user = userOptional.get();
+
             log.info("신규 가입 유저입니다. 추가 정보 입력 페이지로 리다이렉트합니다. User ID: {}", user.getId());
             redirectPath = "/signup?email=" + user.getEmail();
         } else {
-            log.info("기존 유저입니다. 메인 페이지로 리다이렉트합니다. User ID: {}", user.getId());
+            // 기존 유저는 DB 조회가 필요 없음
+            log.info("기존 유저입니다. 메인 페이지로 리다이렉트합니다. User ID: {}", sessionUser.getId());
             redirectPath = "/";
         }
 

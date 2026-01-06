@@ -13,10 +13,12 @@ import java.util.UUID;
 @Getter
 public class SessionUser implements OAuth2User, Serializable {
 
-    private final UUID id; // ★ 우리가 저장할 유일한 데이터
+    private final UUID id;
+    private final boolean isNew;
 
-    public SessionUser(UUID id) {
+    public SessionUser(UUID id, boolean isNew) {
         this.id = id;
+        this.isNew = isNew;
     }
 
     // --- Spring Security가 "구글 정보 내놔" 하면 "없어"라고 대답하는 부분 ---
@@ -38,5 +40,9 @@ public class SessionUser implements OAuth2User, Serializable {
 
     public UUID getId() {
         return id;
+    }
+
+    public boolean isNew() {
+        return isNew;
     }
 }

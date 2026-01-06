@@ -19,6 +19,6 @@ public class News {
     private Long petId;
     @Column(nullable = false)
     private String title;
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String url;
 }

@@ -14,6 +14,7 @@ public class PetitionRes {
     public static class PetitionInfo{
         private String title;
         private Integer type;
+        private String petitionNeeds;
         private String petitionSummary;
         private Integer status;
         private String category;
