@@ -13,7 +13,7 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOrigins(
                         "http://localhost:3000",
                         "http://127.0.0.1:3000",
-                        "http://192.168.0.182.nip.io:3000" // 예시: 실제 프론트엔드 주소를 추가해야 합니다.
+                        "http://114.30.50.84.nip.io:3000" // 예시: 실제 프론트엔드 주소를 추가해야 합니다.
                 )
                 .allowedMethods("GET","POST","PATCH","DELETE","OPTIONS")
                 .allowedHeaders("*")
