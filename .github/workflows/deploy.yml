@@ -1,0 +1,20 @@
+name: EC2 Auto Deploy
+
+on:
+  push:
+    branches: [ "main" ]  # main 브랜치에 코드가 올라오면 실행
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: EC2에 접속해서 배포 스크립트 실행
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}          # 아까 등록한 IP
+          username: ${{ secrets.USERNAME }}  # 아까 등록한 ubuntu
+          key: ${{ secrets.KEY }}            # 아까 등록한 키 내용
+          port: 22
+          script: |
+            # 서버에 있는 스크립트 실행
+            ./deploy.sh
