@@ -21,4 +21,6 @@ public interface CommentRepo extends JpaRepository<Comment,Long> {
     WHERE c.petId = :id
 """)
     List<PetitionRes.CommentInfo> findByPetId(UUID myId, Long id);
+
+    void deleteByUserId(UUID myId);
 }

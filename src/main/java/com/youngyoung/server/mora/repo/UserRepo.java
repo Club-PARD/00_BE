@@ -20,4 +20,6 @@ public interface UserRepo extends JpaRepository<User, Integer> {
             "FROM User u " +
             "WHERE u.id = :myId")
     UserRes.UserInfo findByIdFromFront(UUID myId);
+
+    void deleteById(UUID myId);
 }

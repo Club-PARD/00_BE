@@ -19,4 +19,13 @@ public class UserRes {
         @JsonProperty("status")
         private Integer status;
     }
+    @Builder
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class ScrapInfo{
+        private Long petId;
+        private String title;
+    }
 }

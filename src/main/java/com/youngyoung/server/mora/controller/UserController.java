@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -47,7 +48,8 @@ public class UserController {
         }
     }
 
-    @GetMapping("/user/me")
+    //내정보 조회
+    @GetMapping("/me")
     public ResponseEntity<?> mySetting(@AuthenticationPrincipal OAuth2User oAuth2User) {
         try {
             if (oAuth2User instanceof SessionUser) {
@@ -55,6 +57,42 @@ public class UserController {
                 UUID myId = sessionUser.getId();
                 UserRes.UserInfo result = userService.getUser(myId);
                 return ResponseEntity.ok(result);}
+            else{
+                return ResponseEntity.status(401).body("로그인 해주세요.");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+    //스크랩 조회
+    @GetMapping("/scrap")
+    public ResponseEntity<?> myScrap(@AuthenticationPrincipal OAuth2User oAuth2User) {
+        try {
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+                List<UserRes.ScrapInfo> result = userService.getScrap(myId);
+                return ResponseEntity.ok(result);}
+            else{
+                return ResponseEntity.status(401).body("로그인 해주세요.");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(e.getMessage());
+        }
+    }
+
+    //user 삭제
+    @DeleteMapping("/delete")
+    public ResponseEntity<?> deleteUser(@AuthenticationPrincipal OAuth2User oAuth2User) {
+        try {
+            if (oAuth2User instanceof SessionUser) {
+                SessionUser sessionUser = (SessionUser) oAuth2User;
+                UUID myId = sessionUser.getId();
+                userService.deleteUser(myId);
+                return ResponseEntity.ok(200);}
             else{
                 return ResponseEntity.status(401).body("로그인 해주세요.");
             }
