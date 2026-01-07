@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -34,19 +35,30 @@ public class UserService {
     // 이름은 signUp이지만 실제로는 사용자 정보 수정
     @Transactional
     public Integer save(UserReq.UserInfo userInfo){
-        // 전달받은 이메일로 기존 사용자를 찾음
-        User user = userRepo.findByEmail(userInfo.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. email=" + userInfo.getEmail()));
+        // 이메일로 유저 찾기
+        Optional<User> opUser = userRepo.findByEmail(userInfo.getEmail());
 
-        // User 엔티티에 있는 업데이트 메소드를 사용해 정보 수정
-        user.updateUser(
-                userInfo.getName(),
-                userInfo.getAge(),
-                userInfo.getStatus()
-        );
+        if (opUser.isPresent()) {
+            // [기존 회원] -> 정보 수정 (Update)
+            User user = opUser.get();
+            user.updateUser(
+                    userInfo.getName(),
+                    userInfo.getAge(),
+                    userInfo.getStatus()
+            );
+            return 0; // 수정 완료
+        } else {
+            // [신규 회원] -> 새로 생성 (Insert) ⭐️ 여기가 핵심
+            User newUser = User.builder()
+                    .email(userInfo.getEmail())
+                    .name(userInfo.getName())
+                    .age(userInfo.getAge())
+                    .status(userInfo.getStatus())
+                    .build();
 
-        // @Transactional 어노테이션으로 인해 메소드가 종료될 때 변경된 내용이 자동으로 DB에 반영(UPDATE)됨
-        return 0;
+            userRepo.save(newUser);
+            return 0;
+        }
     }
 
     public Integer check(String id) {

@@ -112,7 +112,10 @@ public class PetitionService {
         return result;
     }
 
+    //반응 처음 누름
     public Integer postLike(PetitionReq.LikeInfo ans, UUID myId) {
+        Petition petition = petitionRepo.findById(ans.getId());
+        petition.plusLikes(ans.getLikes());
         Likes likes = Likes.builder()
                 .petId(ans.getId())
                 .userId(myId)
@@ -166,6 +169,8 @@ public class PetitionService {
     }
 
     public void deleteLike(Likes result) {
+        Petition petition = petitionRepo.findById(result.getPetId());
+        petition.deleteLikes(result.getLikes());
         likesRepo.delete(result);
     }
 

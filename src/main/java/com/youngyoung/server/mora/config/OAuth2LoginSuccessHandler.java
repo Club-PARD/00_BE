@@ -16,13 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.util.Optional;
 
+// (임포트 생략: JwtTokenProvider 등 필요)
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
-    private final UserRepo userRepo; // DB 조회를 위해 UserRepo 주입
+    private final UserRepo userRepo;
+    private final JwtTokenProvider jwtTokenProvider; // 👈 [추가] JWT 생성기 주입 필요
+
+    // ... (이전 코드와 동일)
 
     @Override
     @Transactional(readOnly = true)
@@ -32,42 +37,32 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             Authentication authentication
     ) throws IOException {
 
-        log.info("OAuth2 로그인 성공. Principal: {}", authentication.getPrincipal());
-
-        // 1. 로그인된 사용자 정보 가져오기
         SessionUser sessionUser = (SessionUser) authentication.getPrincipal();
         boolean isNewUser = sessionUser.isNew();
 
-        // 3. 리다이렉트 경로 분기
-        String redirectPath;
-        if (isNewUser) {
-            Optional<User> userOptional = Optional.ofNullable(userRepo.findById(sessionUser.getId()));
-            if (userOptional.isEmpty()) {
-                throw new IllegalArgumentException("Invalid User ID:" + sessionUser.getId());
-            }
-            User user = userOptional.get();
-
-            log.info("신규 가입 유저입니다. 추가 정보 입력 페이지로 리다이렉트합니다. User ID: {}", user.getId());
-            redirectPath = "/signup?email=" + user.getEmail();
-        } else {
-            // 기존 유저는 DB 조회가 필요 없음
-            log.info("기존 유저입니다. 메인 페이지로 리다이렉트합니다. User ID: {}", sessionUser.getId());
-            redirectPath = "/";
-        }
-
-        // 4. 돌아갈 주소(Origin) 찾기 (쿠키에서 확인)
         String targetOrigin = authorizationRequestRepository
                 .getRedirectOrigin(request)
-                .orElse("http://localhost:3000"); // 쿠키 없으면 localhost (개발용)
+                .orElse("http://localhost:3000"); // 프론트 주소
 
-        log.info("🔙 리다이렉트 타겟 Origin: {}", targetOrigin);
+        // 1. 신규 유저인 경우 (DB에 없음)
+        if (isNewUser) {
+            log.info("신규 회원입니다. 회원가입 페이지로 이동합니다. Email: {}", sessionUser.getEmail());
+            // 쿼리 파라미터로 이메일만 넘겨줍니다. 토큰은 아직 없습니다.
+            String redirectUrl = targetOrigin + "/signup?email=" + sessionUser.getEmail();
 
-        // 5. 인증 과정에서 사용된 임시 쿠키 삭제
+            authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
+            response.sendRedirect(redirectUrl);
+            return;
+        }
+
+        // 2. 기존 유저인 경우 (DB에 있음)
+        // 여기서 JWT 토큰 발급
+        String accessToken = jwtTokenProvider.createAccessToken(authentication);
+
+        log.info("기존 유저 로그인 성공. 토큰 발급 완료.");
+        String finalUrl = targetOrigin + "/?token=" + accessToken;
+
         authorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
-
-        // 6. 최종 목적지로 리다이렉트
-        String finalUrl = targetOrigin + redirectPath;
-        log.info("🚀 최종 리다이렉트 URL: {}", finalUrl);
         response.sendRedirect(finalUrl);
     }
 }

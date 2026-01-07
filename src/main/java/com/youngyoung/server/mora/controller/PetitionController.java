@@ -102,6 +102,7 @@ public class PetitionController {
             if (oAuth2User instanceof SessionUser) {
                 SessionUser sessionUser = (SessionUser) oAuth2User;
                 UUID myId = sessionUser.getId();
+                //기존에 반응을 누른 적 있으면 resuilt로 반환
                 Likes result = petitionService.findLike(ans, myId);
                 // result가 null이 아니면 전적 있음
                 if(result != null){
