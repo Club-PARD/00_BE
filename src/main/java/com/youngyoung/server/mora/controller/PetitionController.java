@@ -120,7 +120,7 @@ public class PetitionController {
         }
     }
 
-    //내가 게시물에 뭘 눌렀는지
+    //내가 게시물에 반응 누른 적 있는지 확인
     @GetMapping("/likes/{id}")
     public ResponseEntity<?> postLike(@AuthenticationPrincipal OAuth2User oAuth2User,
                                       @PathVariable Long id) {
