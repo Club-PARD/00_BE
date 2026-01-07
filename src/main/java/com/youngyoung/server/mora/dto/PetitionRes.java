@@ -14,6 +14,7 @@ public class PetitionRes {
     public static class PetitionInfo{
         private String title;
         private Integer type;
+        private String subTitile;
         private String petitionNeeds;
         private String petitionSummary;
         private Integer status;
@@ -26,6 +27,7 @@ public class PetitionRes {
         private Integer good;
         private Integer bad;
         private Integer allows;
+        private String url;
     }
 
     @Builder
