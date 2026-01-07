@@ -84,7 +84,7 @@ public class PetitionService {
         List<PetitionRes.CardNewsInfo> dtoList = entityList.stream()
                 .map(p -> new PetitionRes.CardNewsInfo(
                         p.getId(), p.getTitle(), p.getType(), p.getStatus(),
-                        p.getCategory(), p.getVoteStartDate(), p.getVoteEndDate(), p.getAllows()
+                        p.getCategory(), p.getSubTitle(), p.getVoteStartDate(), p.getVoteEndDate(), p.getAllows()
                 )).collect(Collectors.toList());
 
         return dtoList;

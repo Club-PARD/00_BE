@@ -16,7 +16,7 @@ import java.util.List;
 public interface PetitionRepo extends JpaRepository<Petition, Integer> {
     // 1. 인기순(allows DESC) + 필터링 + 페이징
     @Query("SELECT new com.youngyoung.server.mora.dto.PetitionRes$CardNewsInfo(" +
-            "p.id, p.title, p.type, p.status, p.category, p.voteStartDate, p.voteEndDate, p.allows) " +
+            "p.id, p.title, p.type, p.status, p.category, p.subTitle, p.voteStartDate, p.voteEndDate, p.allows) " +
             "FROM Petition p WHERE " +
             "(:type IS NULL OR p.type = :type) AND " +
             "(:status IS NULL OR p.status = :status) AND " +
@@ -27,7 +27,7 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
 
     // 2. 최신순(vote_start_date DESC) + 필터링 + 페이징
     @Query("SELECT new com.youngyoung.server.mora.dto.PetitionRes$CardNewsInfo(" +
-            "p.id, p.title, p.type, p.status, p.category, p.voteStartDate, p.voteEndDate, p.allows) " +
+            "p.id, p.title, p.type, p.status, p.category, p.subTitle, p.voteStartDate, p.voteEndDate, p.allows) " +
             "FROM Petition p WHERE " +
             "(:type IS NULL OR p.type = :type) AND " +
             "(:status IS NULL OR p.status = :status) AND " +

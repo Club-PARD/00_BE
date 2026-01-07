@@ -41,6 +41,7 @@ public class PetitionRes {
         private Integer type;
         private Integer status;
         private String category;
+        private String subTitle;
         private LocalDateTime voteStartDate;
         private LocalDateTime voteEndDate;
         private Integer allows;
