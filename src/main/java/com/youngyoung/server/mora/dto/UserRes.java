@@ -30,6 +30,7 @@ public class UserRes {
         private Long petId;
         private String title;
         private Integer status;
+        private String result;
         private LocalDateTime voteStartDate;
         private LocalDateTime voteEndDate;
     }
