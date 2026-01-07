@@ -22,4 +22,6 @@ public interface UserRepo extends JpaRepository<User, Integer> {
     UserRes.UserInfo findByIdFromFront(UUID myId);
 
     void deleteById(UUID myId);
+
+    boolean findByName(String name);
 }

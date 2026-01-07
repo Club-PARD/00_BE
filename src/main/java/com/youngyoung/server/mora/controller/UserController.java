@@ -37,11 +37,12 @@ public class UserController {
         }
     }
 
-    @GetMapping("/check/{id}")
-    public ResponseEntity<?> signUp(@PathVariable String id) {
+    @GetMapping("/check/{name}")
+    public ResponseEntity<?> signUp(@PathVariable String name) {
         try {
-            Integer check = userService.check(id);
-            if (check == 1) return ResponseEntity.status(302).body("중복된 아이디");
+            //있으면? 0
+            Integer check = userService.check(name);
+            if (check == 0) return ResponseEntity.status(302).body("중복된 아이디");
             else return ResponseEntity.ok("사용 가능한 닉네임");
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)

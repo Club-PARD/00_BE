@@ -61,8 +61,9 @@ public class UserService {
         }
     }
 
-    public Integer check(String id) {
-        if(userRepo.findById(UUID.fromString(id))==null) return 0;
+    public Integer check(String name) {
+        //있으면? 0
+        if(userRepo.findByName(name)) return 0;
         else return 1;
     }
 

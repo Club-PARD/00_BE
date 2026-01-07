@@ -7,12 +7,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
 
-@EnableScheduling // 스케줄러 쓰시니까 이거 있을 겁니다
+@EnableScheduling
 @SpringBootApplication
 public class MoraApplication {
 
-    // ★ [핵심] 서버 켜지자마자 타임존을 '서울'로 고정
-    @PostConstruct
+    //서울시간
+   @PostConstruct
     public void started() {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
         System.out.println("현재 시간: " + new java.util.Date()); // 로그로 확인
