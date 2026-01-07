@@ -169,6 +169,7 @@ public class PetitionBatchService {
                         .title(excelData.getTitle())
                         .subTitle(aiData.getSubTitle()) // ★ [추가됨] GPT가 만든 훅킹 제목 저장
                         .category(excelData.getCategory())
+                        .finalDate(null)
                         .voteStartDate(excelData.getVoteStartDate())
                         .voteEndDate(excelData.getVoteEndDate())
                         .allows(excelData.getAllows())
@@ -182,6 +183,7 @@ public class PetitionBatchService {
                         .petitionSummary(aiData.getSummary())
                         .positiveEx(String.join(",", aiData.getPositiveTags()))
                         .negativeEx(String.join(",", aiData.getNegativeTags()))
+                        .department("-")
                         .build();
 
                 Petition savedPetition = petitionRepo.save(petition);

@@ -33,7 +33,7 @@ public class Petition {
     private String result;
     @Column(nullable = false)
     private String category;
-    @Column(nullable = false)
+
     private LocalDateTime finalDate;
     @Column(nullable = false)
     private LocalDateTime voteStartDate;
