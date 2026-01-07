@@ -65,7 +65,8 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://54.180.32.70.nip.io:3000",
-                "http://172.30.1.16.nip.io:3000"
+                "http://172.30.1.16.nip.io:3000",
+                "https://00-fe.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
