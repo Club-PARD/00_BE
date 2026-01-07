@@ -40,6 +40,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/v3/api-docs/**",
                                 "/login/**",
                                 "/oauth2/**",
+                                "/test/**",
                                 "/user/signUp",
                                 "/user/check/**",
                                 "/petition/{id}",      // 👈 [추가] 청원 관련 모든 요청 허용

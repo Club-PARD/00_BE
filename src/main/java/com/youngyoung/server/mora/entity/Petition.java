@@ -23,9 +23,9 @@ public class Petition {
     private Integer type;
     @Column(nullable = false)
     private Integer status;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String petitionNeeds;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String petitionSummary;
     @Column(nullable = false)
     private String result;
@@ -35,11 +35,9 @@ public class Petition {
     private LocalDateTime voteStartDate;
     @Column(nullable = false)
     private LocalDateTime voteEndDate;
-    @Column(nullable = false)
-    private LocalDateTime lastUpdateDate;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String positiveEx;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String negativeEx;
     @Column(nullable = false)
     private Integer good=0;

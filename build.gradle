@@ -4,6 +4,11 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
+//전역변수
+ext {
+    set('springCloudVersion', "2024.0.0") // Spring Boot 3.2.x 호환 버전
+}
+
 group = 'com.youngyoung.server'
 version = '0.0.1-SNAPSHOT'
 description = 'mora'
@@ -51,6 +56,29 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    //크롤링
+    implementation 'org.seleniumhq.selenium:selenium-java:4.27.0'
+
+    // OpenAI API 등 통신용
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // JSON 처리 (OpenAI 응답 파싱용)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    //검증 어노테이션
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // 엑셀 처리를 위한 Apache POI (필수)
+    implementation 'org.apache.poi:poi:5.2.3'
+    implementation 'org.apache.poi:poi-ooxml:5.2.3'
+}
+
+// 의존성 매니지먼트 추가
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
 }
 
 tasks.named('test') {
