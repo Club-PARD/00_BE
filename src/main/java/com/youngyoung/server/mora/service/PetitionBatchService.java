@@ -49,8 +49,8 @@ public class PetitionBatchService {
 
     @Transactional
     public void runBatch() {
-        // [설정] 2일 전 데이터부터 수집 (요청 사항 반영)
-        LocalDate targetDate = LocalDate.now().minusDays(2);
+        // [설정] 6일 전 데이터 수집 (요청하신 대로 고정)
+        LocalDate targetDate = LocalDate.now().minusDays(3);
         log.info("배치 시작 - 오늘: {}, 수집 대상 날짜: {}", LocalDate.now(), targetDate);
 
         // 1. Selenium 옵션 설정
@@ -60,7 +60,7 @@ public class PetitionBatchService {
         options.addArguments("--disable-dev-shm-usage");
         options.addArguments("--disable-gpu");
         options.addArguments("--lang=ko_KR");
-        options.addArguments("--window-size=1920,1080"); // 화면 크기 확보
+        options.addArguments("--window-size=1920,1080");
 
         // 다운로드 경로 설정
         String userHome = System.getProperty("user.home");
@@ -77,11 +77,11 @@ public class PetitionBatchService {
         options.setExperimentalOption("prefs", prefs);
 
         WebDriver driver = new ChromeDriver(options);
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15)); // 대기 시간 15초로 넉넉하게
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
 
         try {
             // =================================================
-            // PHASE 1: 엑셀 다운로드 (데이터 포털)
+            // PHASE 1: 엑셀 다운로드
             // =================================================
             driver.get("https://assembly.go.kr/portal/cnts/cntsCont/dataA.do?cntsDivCd=PTT&menuNo=600248");
 
@@ -110,18 +110,16 @@ public class PetitionBatchService {
             }
 
             // =================================================
-            // PHASE 2: 웹에서 URL 매핑 (1~8페이지 스캔)
+            // PHASE 2: 웹에서 URL 매핑 (1~8페이지)
             // =================================================
             Map<String, String> titleUrlMap = new HashMap<>();
 
             for (int i = 1; i <= 8; i++) {
                 log.info("{} 페이지 URL 수집 중...", i);
 
-                // JS로 페이지 이동
                 js.executeScript("prgsPttList_search(" + i + ");");
-                Thread.sleep(2000); // 페이지 로딩 대기
+                Thread.sleep(2000);
 
-                // 목록 테이블에서 제목과 링크 추출
                 List<WebElement> elements = driver.findElements(By.cssSelector("#prgsPttList-dataset-data-table a.board_subject100"));
 
                 for (WebElement el : elements) {
@@ -139,11 +137,9 @@ public class PetitionBatchService {
             // PHASE 3: 상세 페이지 크롤링 & AI 분석
             // =================================================
             for (ExcelRowDto excelData : targetPetitions) {
-                // 제목 매칭 (공백 제거 후 비교)
                 String lookupTitle = excelData.getTitle().replaceAll("\\s+", "");
                 String detailUrl = titleUrlMap.get(lookupTitle);
 
-                // 못 찾으면 부분 일치 시도
                 if (detailUrl == null) {
                     detailUrl = findUrlByPartialMatch(titleUrlMap, excelData.getTitle());
                 }
@@ -155,9 +151,8 @@ public class PetitionBatchService {
 
                 log.info("상세 페이지 진입: {}", detailUrl);
                 driver.get(detailUrl);
-                Thread.sleep(2000); // 상세 페이지 로딩 대기
+                Thread.sleep(2000);
 
-                // ★ [핵심 수정] 본문 찾기 전략 (여러 클래스 시도)
                 String fullText = extractPetitionContent(driver);
 
                 if (fullText.isBlank()) {
@@ -172,6 +167,7 @@ public class PetitionBatchService {
                 // DB 저장
                 Petition petition = Petition.builder()
                         .title(excelData.getTitle())
+                        .subTitle(aiData.getSubTitle()) // ★ [추가됨] GPT가 만든 훅킹 제목 저장
                         .category(excelData.getCategory())
                         .voteStartDate(excelData.getVoteStartDate())
                         .voteEndDate(excelData.getVoteEndDate())
@@ -181,14 +177,15 @@ public class PetitionBatchService {
                         .result("-")
                         .good(0)
                         .bad(0)
-                        .petitionNeeds(aiData.getNeeds())
+                        .url(detailUrl)
+                        .petitionNeeds(aiData.getNeeds()) // 여기는 제목 제외된 개요가 들어감
                         .petitionSummary(aiData.getSummary())
                         .positiveEx(String.join(",", aiData.getPositiveTags()))
                         .negativeEx(String.join(",", aiData.getNegativeTags()))
                         .build();
 
                 Petition savedPetition = petitionRepo.save(petition);
-                log.info("청원 저장 완료 (ID: {})", savedPetition.getId());
+                log.info("청원 저장 완료 (ID: {}, 소제목: {})", savedPetition.getId(), aiData.getSubTitle());
 
                 // 관련 법안 저장
                 if (aiData.getLaws() != null) {
@@ -214,19 +211,9 @@ public class PetitionBatchService {
         }
     }
 
-    // ★ [핵심 Helper] 본문 추출 로직 (여러 선택자 시도)
+    // Helper: 본문 추출
     private String extractPetitionContent(WebDriver driver) {
-        // 국회 청원 사이트에서 사용될 수 있는 본문 클래스 후보군
-        List<String> selectors = List.of(
-                ".pet_content",      // 기존 추정
-                ".pre_view",         // 많이 쓰이는 미리보기 클래스
-                ".view_txt",         // 일반적인 게시판 본문
-                ".contents",         // 범용 컨텐츠
-                ".board_view",       // 게시판 뷰
-                "div[class*='content']", // 'content'가 포함된 div
-                ".cont"              // 축약형
-        );
-
+        List<String> selectors = List.of(".pet_content", ".pre_view", ".view_txt", ".contents", ".board_view", "div[class*='content']", ".cont");
         for (String selector : selectors) {
             try {
                 List<WebElement> elements = driver.findElements(By.cssSelector(selector));
@@ -237,52 +224,37 @@ public class PetitionBatchService {
                         return text;
                     }
                 }
-            } catch (Exception ignored) {
-                // 실패 시 다음 선택자 시도
-            }
+            } catch (Exception ignored) {}
         }
-
-        // 정 안되면 body 텍스트라도 긁어오기 (최후의 수단)
         try {
-            log.warn("본문 클래스를 찾지 못해 Body 전체 텍스트를 시도합니다.");
+            log.warn("Body 전체 텍스트 시도");
             return driver.findElement(By.tagName("body")).getText();
-        } catch (Exception e) {
-            return "";
-        }
+        } catch (Exception e) { return ""; }
     }
 
+    // Helper: 엑셀 파싱
     private List<ExcelRowDto> parseExcelAndFilter(File file, LocalDate targetDate) {
         List<ExcelRowDto> result = new ArrayList<>();
-
-        try (FileInputStream fis = new FileInputStream(file);
-             Workbook workbook = new XSSFWorkbook(fis)) {
-
+        try (FileInputStream fis = new FileInputStream(file); Workbook workbook = new XSSFWorkbook(fis)) {
             Sheet sheet = workbook.getSheetAt(0);
-
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
-
                 try {
-                    // [0]번호, [1]분야, [2]제목, [3]기간, [4]동의자수
                     String period = row.getCell(3).getStringCellValue();
                     String[] dates = period.split(" ~ ");
-
                     LocalDate startDate = LocalDate.parse(dates[0].trim(), DateTimeFormatter.ISO_DATE);
 
-                    // 시작일이 타겟 날짜와 같은지 확인
                     if (startDate.isEqual(targetDate)) {
                         String category = row.getCell(1).getStringCellValue();
                         String title = row.getCell(2).getStringCellValue();
                         LocalDate endDate = LocalDate.parse(dates[1].trim(), DateTimeFormatter.ISO_DATE);
-
                         int allows = 0;
                         if (row.getCell(4).getCellType() == CellType.NUMERIC) {
                             allows = (int) row.getCell(4).getNumericCellValue();
                         } else {
                             allows = Integer.parseInt(row.getCell(4).getStringCellValue().replace(",", ""));
                         }
-
                         result.add(ExcelRowDto.builder()
                                 .category(category)
                                 .title(title)
@@ -290,26 +262,18 @@ public class PetitionBatchService {
                                 .voteEndDate(endDate.atStartOfDay())
                                 .allows(allows)
                                 .build());
-
                         log.info("수집 대상 발견: {}", title);
                     }
-                } catch (Exception e) {
-                    // 날짜 파싱 등 에러 시 해당 행 스킵
-                }
+                } catch (Exception e) {}
             }
-        } catch (Exception e) {
-            log.error("엑셀 파일 읽기 실패", e);
-        }
+        } catch (Exception e) { log.error("엑셀 읽기 실패", e); }
         return result;
     }
 
     private void waitForFileDownload(File file, int timeoutSeconds) throws InterruptedException {
         int attempts = 0;
         while (attempts < timeoutSeconds) {
-            if (file.exists() && file.length() > 0) {
-                log.info("파일 다운로드 확인: {}", file.getName());
-                return;
-            }
+            if (file.exists() && file.length() > 0) return;
             Thread.sleep(1000);
             attempts++;
         }
@@ -318,14 +282,11 @@ public class PetitionBatchService {
 
     private String extractUrlFromOnclick(String onClickValue) {
         if (onClickValue == null || onClickValue.isEmpty()) return null;
-
         Pattern pattern = Pattern.compile("'([^']*)'");
         Matcher matcher = pattern.matcher(onClickValue);
-
         if (matcher.find()) {
             String extractedId = matcher.group(1);
             if (!extractedId.startsWith("http") && !extractedId.startsWith("/")) {
-                // 최신 URL 패턴 적용
                 return "https://petitions.assembly.go.kr/proceed/onGoingAll/" + extractedId;
             }
             return extractedId;
@@ -337,7 +298,6 @@ public class PetitionBatchService {
         String normalizedExcelTitle = excelTitle.replaceAll("\\s+", "");
         for (String mapKey : map.keySet()) {
             if (mapKey.contains(normalizedExcelTitle) || normalizedExcelTitle.contains(mapKey)) {
-                log.info("유사 매칭 성공 [{} -> {}]", excelTitle, mapKey);
                 return map.get(mapKey);
             }
         }

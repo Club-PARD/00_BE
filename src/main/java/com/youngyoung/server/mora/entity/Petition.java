@@ -23,6 +23,8 @@ public class Petition {
     private Integer type;
     @Column(nullable = false)
     private Integer status;
+    @Column(nullable = false)
+    private String subTitle;
     @Column(nullable = false, columnDefinition = "TEXT")
     private String petitionNeeds;
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -45,23 +47,33 @@ public class Petition {
     private Integer bad=0;
     @Column(nullable = false)
     private Integer allows;
+    @Column(nullable = false)
+    private String url;
 
     public long getId() {
         return id;
     }
 
+    //좋아요 <-> 싫어요 교차
     public void updateLikes(Integer likes) {
         this.good -= likes;
         this.bad -= likes;
     }
 
+    //좋아요나 싫어요 처음 누름
     public void plusLikes(Integer likes) {
         if(likes>0) this.good += likes;
         else this.bad += likes;
     }
 
+    //짝수 번 눌러서 삭제해야함
     public void deleteLikes(Integer likes) {
         if(likes>0) this.good -= likes;
         else this.bad -= likes;
+    }
+
+    //동의자 수 업데이트용 편의 메소드
+    public void updateAllows(Integer allows) {
+        this.allows = allows;
     }
 }
