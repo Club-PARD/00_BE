@@ -34,6 +34,8 @@ public class Petition {
     @Column(nullable = false)
     private String category;
     @Column(nullable = false)
+    private LocalDateTime finalDate;
+    @Column(nullable = false)
     private LocalDateTime voteStartDate;
     @Column(nullable = false)
     private LocalDateTime voteEndDate;
@@ -49,6 +51,8 @@ public class Petition {
     private Integer allows;
     @Column(nullable = false)
     private String url;
+    @Column(nullable = false)
+    private String department;
 
     public long getId() {
         return id;

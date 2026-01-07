@@ -20,6 +20,7 @@ public class PetitionRes {
         private Integer status;
         private String category;
         private LocalDateTime voteStartDate;
+        private LocalDateTime finalDate;
         private LocalDateTime voteEndDate;
         private String result;
         private String positiveEx;
@@ -28,6 +29,7 @@ public class PetitionRes {
         private Integer bad;
         private Integer allows;
         private String url;
+        private String department;
     }
 
     @Builder

@@ -50,7 +50,7 @@ public class PetitionBatchService {
     @Transactional
     public void runBatch() {
         // [설정] 6일 전 데이터 수집 (요청하신 대로 고정)
-        LocalDate targetDate = LocalDate.now().minusDays(6);
+        LocalDate targetDate = LocalDate.now().minusDays(3);
         log.info("배치 시작 - 오늘: {}, 수집 대상 날짜: {}", LocalDate.now(), targetDate);
 
         // 1. Selenium 옵션 설정
