@@ -17,6 +17,6 @@ public class Laws {
     private Long id;
     @Column(nullable = false, unique = true)
     private String title;
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String summary;
 }

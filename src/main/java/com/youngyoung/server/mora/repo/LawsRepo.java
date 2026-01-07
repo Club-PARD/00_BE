@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface LawsRepo  extends JpaRepository<Laws, Integer> {
@@ -15,4 +16,6 @@ public interface LawsRepo  extends JpaRepository<Laws, Integer> {
             "FROM Laws l JOIN LawsLink ll ON ll.lawId = l.id " +
             "WHERE ll.petId = :id")
     List<PetitionRes.LawsInfo> findByPetId(Long id);
+
+    Optional<Laws> findByTitle(String name);
 }
