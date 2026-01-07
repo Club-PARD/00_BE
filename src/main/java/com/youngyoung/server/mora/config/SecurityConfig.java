@@ -43,7 +43,8 @@ public class SecurityConfig {
                                 "/test/**",
                                 "/user/signUp",
                                 "/user/check/**",
-                                "/petition/{id}",      // 👈 [추가] 청원 관련 모든 요청 허용
+                                "/petition/{id}",
+                                "/petition/laws/{id}",
                                 "/petition/cardNews/**" // 혹시 몰라 명시
                         ).permitAll()
                         .anyRequest().authenticated()
@@ -66,7 +67,8 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://54.180.32.70.nip.io:3000",
-                "http://172.30.1.16.nip.io:3000"
+                "http://172.30.1.16.nip.io:3000",
+                "https://00-fe.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
