@@ -157,8 +157,8 @@ public class PetitionService {
 
     public Integer deleteComment(UUID myId, Long id) {
         Optional<Comment> comment  =  commentRepo.findById(id);
-        if(comment.get().getUserId() == myId){
-            commentRepo.deleteById(id);
+        if(comment.get().getUserId().equals(myId)){
+            commentRepo.delete(comment.get());
             return 0;
         }
         else{return 1;}
