@@ -1,4 +1,3 @@
-
 package com.youngyoung.server.mora.config;
 
 import jakarta.servlet.http.Cookie;
@@ -19,7 +18,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
 
     public static final String OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME = "oauth2_auth_request";
 
-    // 🔥 수정: 프론트엔드(Next.js)가 보내는 파라미터 이름과 일치시킴
+    // 프론트엔드와 맞춘 쿠키 이름
     public static final String REDIRECT_ORIGIN_PARAM_COOKIE_NAME = "redirect_origin";
 
     private static final int cookieExpireSeconds = 180;
@@ -38,27 +37,38 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
             return;
         }
 
+        // 1. OAuth2 요청 정보를 쿠키에 저장
         Cookie cookie = new Cookie(OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME, serialize(authorizationRequest));
         cookie.setPath("/");
         cookie.setHttpOnly(true);
         cookie.setMaxAge(cookieExpireSeconds);
         response.addCookie(cookie);
 
-        // Referer 헤더에서 Origin을 추출하여 쿠키에 저장
-        String referer = request.getHeader("Referer");
-        if (StringUtils.hasText(referer)) {
-            try {
-                java.net.URI uri = new java.net.URI(referer);
-                String redirectOrigin = uri.getScheme() + "://" + uri.getAuthority();
+        // 2. 리다이렉트할 Origin 저장 로직 수정 (파라미터 우선 -> 없으면 Referer)
+        String redirectOrigin = request.getParameter("origin");
 
-                Cookie redirectCookie = new Cookie(REDIRECT_ORIGIN_PARAM_COOKIE_NAME, redirectOrigin);
-                redirectCookie.setPath("/");
-                redirectCookie.setHttpOnly(true);
-                redirectCookie.setMaxAge(cookieExpireSeconds);
-                response.addCookie(redirectCookie);
-            } catch (java.net.URISyntaxException e) {
-                // Referer 파싱에 실패하면 아무것도 하지 않음
+        // 파라미터가 없으면 Referer 헤더에서 추출 시도
+        if (!StringUtils.hasText(redirectOrigin)) {
+            String referer = request.getHeader("Referer");
+            if (StringUtils.hasText(referer)) {
+                try {
+                    java.net.URI uri = new java.net.URI(referer);
+                    redirectOrigin = uri.getScheme() + "://" + uri.getAuthority();
+                } catch (Exception e) {
+                    // Referer 파싱 실패 시 무시
+                }
             }
+        }
+
+        // 3. 찾은 Origin이 있다면 쿠키에 저장
+        if (StringUtils.hasText(redirectOrigin)) {
+            Cookie redirectCookie = new Cookie(REDIRECT_ORIGIN_PARAM_COOKIE_NAME, redirectOrigin);
+            redirectCookie.setPath("/");
+            redirectCookie.setHttpOnly(true);
+            redirectCookie.setMaxAge(cookieExpireSeconds);
+            // HTTPS 환경이라면 아래 설정을 true로 하는 것이 좋습니다.
+            redirectCookie.setSecure(true);
+            response.addCookie(redirectCookie);
         }
     }
 
@@ -72,7 +82,6 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
         deleteCookie(request, response, REDIRECT_ORIGIN_PARAM_COOKIE_NAME);
     }
 
-    // 🔥 추가: SuccessHandler에서 사용할 수 있게 쿠키 값을 읽는 메서드 공개
     public Optional<String> getRedirectOrigin(HttpServletRequest request) {
         return getCookie(request, REDIRECT_ORIGIN_PARAM_COOKIE_NAME)
                 .map(Cookie::getValue);
