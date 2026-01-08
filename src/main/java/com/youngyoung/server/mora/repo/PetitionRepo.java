@@ -23,7 +23,7 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
             "(:type IS NULL OR p.type = :type) AND " +
             "(:status IS NULL OR p.status = :status) AND " +
             "(:categories IS NULL OR p.category IN :categories) AND " +
-            "(:keyWord IS NULL OR p.title LIKE %:keyWord%) " +
+            "(:keyWord IS NULL OR p.title LIKE :keyWord) " +
             "ORDER BY p.allows DESC LIMIT :limit OFFSET :offset")
     List<PetitionRes.CardNewsInfo> findCardNewsPopular(Integer type, Integer status, List<String> categories, String keyWord, int limit, int offset);
 
