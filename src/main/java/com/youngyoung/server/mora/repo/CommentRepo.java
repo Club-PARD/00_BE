@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CommentRepo extends JpaRepository<Comment,Long> {
@@ -22,5 +23,9 @@ public interface CommentRepo extends JpaRepository<Comment,Long> {
 """)
     List<PetitionRes.CommentInfo> findByPetId(UUID myId, Long id);
 
+    Optional<Comment> findById(Long id);
+
     void deleteByUserId(UUID myId);
+
+    void deleteById(Long id);
 }
