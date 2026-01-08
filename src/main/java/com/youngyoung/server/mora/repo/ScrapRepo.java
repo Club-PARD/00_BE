@@ -3,6 +3,7 @@ package com.youngyoung.server.mora.repo;
 import com.youngyoung.server.mora.dto.UserRes;
 import com.youngyoung.server.mora.entity.Scrap;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -17,6 +18,7 @@ public interface ScrapRepo extends JpaRepository<Scrap,Long> {
 
     void deleteByUserId(UUID myId);
 
+    @Modifying
     @Query("DELETE FROM Scrap s WHERE s.userId = :myId AND s.petId IN :id")
     void deleteByUserIdAndPetId(UUID myId, List<Long> id);
 }

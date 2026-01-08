@@ -82,6 +82,7 @@ public class UserService {
         userRepo.deleteById(myId);
     }
 
+    @Transactional
     public void deleteScraps(UUID myId, List<Long> id) {
         scrapRepo.deleteByUserIdAndPetId(myId, id);
     }
