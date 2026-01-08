@@ -44,6 +44,7 @@ public class SecurityConfig {
                                 "/user/signUp",
                                 "/user/check/**",
                                 "/petition/{id}",
+                                "/petition/comment/{id}",
                                 "/petition/laws/{id}",
                                 "/petition/cardNews/**" // 혹시 몰라 명시
                         ).permitAll()

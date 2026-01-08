@@ -14,7 +14,7 @@ public interface CommentRepo extends JpaRepository<Comment,Long> {
         c.id,
         u.name,
         c.body,
-        CASE WHEN c.userId = :myId THEN true ELSE false END
+        CASE WHEN (:myId IS NOT NULL AND c.userId = :myId) THEN true ELSE false END
     )
     FROM Comment c
     JOIN User u ON u.id = c.userId
