@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.awt.print.Pageable;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PetitionRepo extends JpaRepository<Petition, Integer> {
@@ -60,4 +61,6 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
 
     // 처리결과 업데이트 대상 (result="-", finalDate가 과거인 것)
     List<Petition> findByResultAndFinalDateBefore(String result, LocalDateTime now);
+
+    Optional<Petition> findByTitle(String title);
 }
