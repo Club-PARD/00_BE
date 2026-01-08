@@ -98,7 +98,7 @@ public class GptService {
                     "소제목3/상세내용3"
                 ],
                 "laws": [
-                    { "name": "관련 법안명(없으면 출력x)", "content": "조문 내용 요약" }
+                    { "name": "관련 법안명(1~2가지)", "content": "조문 내용 요약" }
                 ]
             }
             """;

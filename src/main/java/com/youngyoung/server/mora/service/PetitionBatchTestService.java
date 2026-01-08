@@ -10,21 +10,36 @@ import com.youngyoung.server.mora.entity.Petition;
 import com.youngyoung.server.mora.repo.LawsLinkRepo;
 import com.youngyoung.server.mora.repo.LawsRepo;
 import com.youngyoung.server.mora.repo.PetitionRepo;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +56,9 @@ public class PetitionBatchTestService {
     @Value("${open-api.assembly.key}")
     private String assemblyApiKey;
 
-    // 1. [테스트용] 처리현황 데이터 생성
+    // ======================================================================
+    // 1. [테스트용] 처리현황 데이터 생성 (API)
+    // ======================================================================
     @Transactional
     public void createDummyProcessedPetitions() {
         log.info(">>>> [TEST] 처리현황 API(21대) 5개 가져와서 '처리 전' 상태로 저장 시작");
@@ -55,12 +72,13 @@ public class PetitionBatchTestService {
         }
     }
 
-    // 2. [테스트용] 계류현황 데이터 생성
+    // ======================================================================
+    // 2. [테스트용] 계류현황 데이터 생성 (API)
+    // ======================================================================
     @Transactional
     public void createDummyPendingPetitions() {
         log.info(">>>> [TEST] 계류현황 API 5개 가져와서 '소관위 미정' 상태로 저장 시작");
         try {
-            // ★ [수정됨] 파라미터 개수 맞춤 (AGE 자리에 null 전달)
             String jsonResponse = openAssemblyClient.getPendingPetitions(
                     assemblyApiKey, "json", 1, 5, null, null
             );
@@ -70,9 +88,156 @@ public class PetitionBatchTestService {
         }
     }
 
-    // 공통 로직
-    private void processAndSaveTestPetitions(String jsonResponse, boolean isProcessedData) throws Exception {
+    // ======================================================================
+    // 3. [테스트용] 엑셀 상위 40개 가져오기 (크롤링 + GPT 포함)
+    // ======================================================================
+    @Transactional
+    public void createFromExcelTop40() {
+        log.info(">>>> [TEST] 엑셀 다운로드 후 상위 40개 데이터 수집 시작");
+
         // Selenium 설정
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless=new");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--lang=ko_KR");
+        options.addArguments("--window-size=1920,1080");
+
+        String userHome = System.getProperty("user.home");
+        String downloadPath = java.nio.file.Paths.get(userHome, "Downloads").toString();
+        File downloadDir = new File(downloadPath);
+        if (!downloadDir.exists()) downloadDir.mkdirs();
+
+        Map<String, Object> prefs = new HashMap<>();
+        prefs.put("download.default_directory", downloadPath);
+        options.setExperimentalOption("prefs", prefs);
+
+        WebDriver driver = new ChromeDriver(options);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+
+        try {
+            // 1. 엑셀 다운로드
+            driver.get("https://assembly.go.kr/portal/cnts/cntsCont/dataA.do?cntsDivCd=PTT&menuNo=600248");
+
+            File[] oldFiles = downloadDir.listFiles((dir, name) -> name.startsWith("진행중청원 목록"));
+            if (oldFiles != null) for (File f : oldFiles) f.delete();
+
+            WebElement downloadBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("prgsPtt_excel-down")));
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+            js.executeScript("arguments[0].click();", downloadBtn);
+            log.info("엑셀 다운로드 요청...");
+
+            File excelFile = new File(downloadPath, "진행중청원 목록.xlsx");
+            waitForFileDownload(excelFile, 30);
+
+            // 2. 엑셀 파싱 및 상위 40개 필터링
+            List<ExcelRowDto> allPetitions = parseExcelAll(excelFile);
+            List<ExcelRowDto> top40Petitions = allPetitions.stream().limit(40).toList();
+            log.info("엑셀 파싱 완료. 상위 {}개 데이터를 처리합니다.", top40Petitions.size());
+
+            // 3. URL 수집 (1~5 페이지 스캔)
+            Map<String, String> titleUrlMap = new HashMap<>();
+            for (int i = 1; i <= 5; i++) {
+                js.executeScript("prgsPttList_search(" + i + ");");
+                Thread.sleep(1500);
+                List<WebElement> elements = driver.findElements(By.cssSelector("#prgsPttList-dataset-data-table a.board_subject100"));
+                for (WebElement el : elements) {
+                    String url = extractUrlFromOnclick(el.getAttribute("onclick"));
+                    if (url != null) {
+                        titleUrlMap.put(el.getText().trim().replaceAll("\\s+", ""), url);
+                    }
+                }
+            }
+
+            // 4. 상세 크롤링 & 저장
+            int count = 0;
+            for (ExcelRowDto dto : top40Petitions) {
+                if (petitionRepo.findByTitle(dto.getTitle()).isPresent()) {
+                    log.info("[SKIP] 이미 존재하는 청원: {}", dto.getTitle());
+                    continue;
+                }
+
+                String lookupTitle = dto.getTitle().replaceAll("\\s+", "");
+                String detailUrl = titleUrlMap.get(lookupTitle);
+                if (detailUrl == null) detailUrl = findUrlByPartialMatch(titleUrlMap, dto.getTitle());
+
+                if (detailUrl == null) {
+                    log.warn("[SKIP] URL 못 찾음: {}", dto.getTitle());
+                    continue;
+                }
+
+                driver.get(detailUrl);
+                Thread.sleep(1500);
+                String fullText = extractPetitionContent(driver);
+                if (fullText.isBlank()) continue;
+
+                // ★ GPT 분석 (안전 처리)
+                AiResponseDto aiData;
+                try {
+                    aiData = gptService.analyzePetition(fullText);
+                } catch (Exception e) {
+                    log.error("GPT 오류 (청원: {}). 기본값 저장.", dto.getTitle());
+                    aiData = AiResponseDto.builder()
+                            .subTitle(dto.getTitle())
+                            .needs("분석 실패: 원문을 확인해주세요.")
+                            .summary("AI 분석 실패")
+                            .positiveTags(List.of("분석 실패/잠시 후 다시 시도해주세요"))
+                            .negativeTags(List.of("분석 실패/잠시 후 다시 시도해주세요"))
+                            .laws(null)
+                            .build();
+                }
+
+                List<String> posTags = aiData.getPositiveTags() != null ? aiData.getPositiveTags() : new ArrayList<>();
+                List<String> negTags = aiData.getNegativeTags() != null ? aiData.getNegativeTags() : new ArrayList<>();
+
+                Petition p = Petition.builder()
+                        .title(dto.getTitle())
+                        .subTitle(aiData.getSubTitle())
+                        .category(dto.getCategory())
+                        .voteStartDate(dto.getVoteStartDate())
+                        .voteEndDate(dto.getVoteEndDate())
+                        .allows(dto.getAllows())
+                        .url(detailUrl)
+                        .petitionNeeds(aiData.getNeeds())
+                        .petitionSummary(aiData.getSummary())
+                        .positiveEx(String.join(",", posTags))
+                        .negativeEx(String.join(",", negTags))
+                        .type(1)
+                        .status(0)
+                        .result("-")
+                        .department("-")
+                        .good(0)
+                        .bad(0)
+                        .finalDate(null)
+                        .build();
+
+                Petition saved = petitionRepo.save(p);
+                count++;
+                log.info("[{}/40] 저장 완료: {}", count, saved.getTitle());
+
+                if (aiData.getLaws() != null) {
+                    for (AiResponseDto.LawDto lawDto : aiData.getLaws()) {
+                        Laws law = lawsRepo.findByTitle(lawDto.getName())
+                                .orElseGet(() -> lawsRepo.save(Laws.builder()
+                                        .title(lawDto.getName()).summary(lawDto.getContent()).build()));
+                        lawsLinkRepo.save(LawsLink.builder().petId(saved.getId()).lawId(law.getId()).build());
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("엑셀 배치 작업 중 오류", e);
+        } finally {
+            driver.quit();
+        }
+    }
+
+    // ======================================================================
+    // Helper Methods
+    // ======================================================================
+
+    private void processAndSaveTestPetitions(String jsonResponse, boolean isProcessedData) throws Exception {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new");
         options.addArguments("--no-sandbox");
@@ -101,8 +266,6 @@ public class PetitionBatchTestService {
                     continue;
                 }
 
-                log.info("테스트 데이터 생성 중: {}", row.getBillName());
-
                 String targetUrl = (row.getLinkUrl() != null && !row.getLinkUrl().isEmpty())
                         ? row.getLinkUrl() : "https://petitions.assembly.go.kr";
 
@@ -117,27 +280,16 @@ public class PetitionBatchTestService {
                 LocalDateTime endDate = parseDate(row.getCommitteeDt());
                 if (endDate == null) endDate = startDate.plusDays(30);
 
-                // =========================================================
-                // ★ [수정됨] API 값이 있으면 넣고, 없으면 테스트용 기본값 사용
-                // =========================================================
-
-                // 1. 소관위 (Department)
                 String department = row.getCurrCommittee();
                 if (department == null || department.isBlank() || department.equals("null")) {
                     department = "-";
                 }
 
-                // 2. 회부일 (FinalDate)
                 LocalDateTime finalDate = parseDate(row.getCommitteeDt());
-
-                // [처리현황 테스트인 경우] -> 강제 과거 날짜 부여
                 if (isProcessedData && finalDate == null) {
                     finalDate = LocalDateTime.now().minusMonths(6);
                 }
 
-                // [계류현황 테스트인 경우] -> 그대로 null 유지 (업데이트 대상이 되기 위해)
-
-                // 저장
                 Petition petition = Petition.builder()
                         .title(row.getBillName())
                         .subTitle(aiData.getSubTitle())
@@ -146,8 +298,8 @@ public class PetitionBatchTestService {
                         .voteEndDate(endDate)
                         .allows(50000)
                         .type(1)
-                        .status(1)        // 1: 종료된 상태
-                        .result("-")      // "-": 결과 미정
+                        .status(1)
+                        .result("-")
                         .department(department)
                         .finalDate(finalDate)
                         .good(0)
@@ -160,7 +312,7 @@ public class PetitionBatchTestService {
                         .build();
 
                 petitionRepo.save(petition);
-                log.info("저장 완료: {} (소관위: {}, 회부일: {})", petition.getTitle(), department, finalDate);
+                log.info("저장 완료: {}", petition.getTitle());
 
                 if (aiData.getLaws() != null) {
                     for (AiResponseDto.LawDto lawDto : aiData.getLaws()) {
@@ -176,20 +328,83 @@ public class PetitionBatchTestService {
         }
     }
 
+    private List<ExcelRowDto> parseExcelAll(File file) {
+        List<ExcelRowDto> result = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(file); Workbook workbook = new XSSFWorkbook(fis)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+                try {
+                    String category = row.getCell(1).getStringCellValue();
+                    String title = row.getCell(2).getStringCellValue();
+                    String period = row.getCell(3).getStringCellValue();
+                    String[] dates = period.split(" ~ ");
+                    LocalDate startDate = LocalDate.parse(dates[0].trim(), DateTimeFormatter.ISO_DATE);
+                    LocalDate endDate = LocalDate.parse(dates[1].trim(), DateTimeFormatter.ISO_DATE);
+                    int allows = (row.getCell(4).getCellType() == CellType.NUMERIC)
+                            ? (int) row.getCell(4).getNumericCellValue()
+                            : Integer.parseInt(row.getCell(4).getStringCellValue().replace(",", ""));
+                    result.add(ExcelRowDto.builder()
+                            .category(category)
+                            .title(title)
+                            .voteStartDate(startDate.atStartOfDay())
+                            .voteEndDate(endDate.atStartOfDay())
+                            .allows(allows)
+                            .build());
+                } catch (Exception e) {}
+            }
+        } catch (Exception e) { log.error("엑셀 읽기 실패", e); }
+        return result;
+    }
+
     private LocalDateTime parseDate(String dateStr) {
         if (dateStr == null || dateStr.isBlank() || dateStr.equals("null")) return null;
         try {
             return LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE).atStartOfDay();
-        } catch (Exception e) {
-            return null;
-        }
+        } catch (Exception e) { return null; }
     }
 
     private String extractPetitionContent(WebDriver driver) {
-        try {
-            WebElement body = driver.findElement(By.tagName("body"));
-            String text = body.getText();
-            return (text != null) ? text : "";
-        } catch (Exception ignored) { return ""; }
+        List<String> selectors = List.of(".pet_content", ".pre_view", ".view_txt", ".contents", ".board_view", "div[class*='content']", ".cont");
+        for (String selector : selectors) {
+            try {
+                List<WebElement> elements = driver.findElements(By.cssSelector(selector));
+                if (!elements.isEmpty() && !elements.get(0).getText().trim().isEmpty()) return elements.get(0).getText().trim();
+            } catch (Exception ignored) {}
+        }
+        try { return driver.findElement(By.tagName("body")).getText(); } catch (Exception e) { return ""; }
+    }
+
+    private void waitForFileDownload(File file, int timeoutSeconds) throws InterruptedException {
+        int attempts = 0;
+        while (attempts < timeoutSeconds) {
+            if (file.exists() && file.length() > 0) return;
+            Thread.sleep(1000);
+            attempts++;
+        }
+        throw new RuntimeException("파일 다운로드 실패");
+    }
+
+    private String extractUrlFromOnclick(String onClickValue) {
+        if (onClickValue == null || onClickValue.isEmpty()) return null;
+        Pattern pattern = Pattern.compile("'([^']*)'");
+        Matcher matcher = pattern.matcher(onClickValue);
+        if (matcher.find()) {
+            String extractedId = matcher.group(1);
+            if (!extractedId.startsWith("http") && !extractedId.startsWith("/")) return "https://petitions.assembly.go.kr/proceed/onGoingAll/" + extractedId;
+            return extractedId;
+        }
+        return null;
+    }
+
+    private String findUrlByPartialMatch(Map<String, String> map, String excelTitle) {
+        String normalizedExcelTitle = excelTitle.replaceAll("\\s+", "");
+        for (String mapKey : map.keySet()) {
+            if (mapKey.contains(normalizedExcelTitle) || normalizedExcelTitle.contains(mapKey)) return map.get(mapKey);
+        }
+        return null;
     }
 }
+
+// (ExcelRowDto는 파일 맨 아래나 별도 파일에 위치)
