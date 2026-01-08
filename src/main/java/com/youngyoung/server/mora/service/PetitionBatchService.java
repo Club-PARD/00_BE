@@ -60,90 +60,61 @@ public class PetitionBatchService {
     @Transactional
     public void runBatch() {
         log.info("========== [Mora Batch] 작업 시작 ==========");
-        updatePetitionStatusAndResult(); // Phase 0
-        runCrawlingBatch();              // Phase 1~4
+        updatePetitionStatusAndResult();
+        runCrawlingBatch();
         log.info("========== [Mora Batch] 작업 종료 ==========");
     }
 
-    // [Phase 0] 기존 데이터 업데이트
+    // [Phase 0] 기존 데이터 업데이트 (API + 22/21대 통합 검색)
     private void updatePetitionStatusAndResult() {
         log.info(">> [Phase 0] 기존 청원 상태 및 결과 업데이트 시작");
 
-        // 1. 기간 만료 처리 (0 -> 1)
+        // 1. 기간 만료 처리
         List<Petition> expiredPetitions = petitionRepo.findAllByStatusAndVoteEndDateBefore(0, LocalDateTime.now());
-        for (Petition p : expiredPetitions) {
-            p.updateStatus(1);
-        }
+        for (Petition p : expiredPetitions) p.updateStatus(1);
         log.info("기간 만료 청원 {}건 상태 변경 완료 (0->1)", expiredPetitions.size());
 
-        // 2. 계류정보(소관위, 회부일) 업데이트 (Status=1, Department="-")
+        // 2. 계류정보 업데이트
         List<Petition> pendingPetitions = petitionRepo.findByStatusAndDepartment(1, "-");
-        log.info("계류정보 업데이트 대상 {}건 조회됨", pendingPetitions.size());
+        log.info("업데이트 대상(소관위 미정) {}건 조회됨", pendingPetitions.size());
 
         for (Petition p : pendingPetitions) {
-            try {
-                // API 호출 (제목으로 검색)
-                String jsonResponse = openAssemblyClient.getPendingPetitions(assemblyApiKey, "json", 1, 20, p.getTitle());
-                OpenApiDto dto = objectMapper.readValue(jsonResponse, OpenApiDto.class);
+            String title = p.getTitle();
+            OpenApiDto.Row row = searchPetitionByAge(title, false); // 계류현황 검색
 
-                if (dto.getPendingList() != null && !dto.getPendingList().isEmpty()) {
-                    List<OpenApiDto.Row> rows = dto.getPendingList().get(1).getRow();
-                    if (rows != null && !rows.isEmpty()) {
-                        // 제목이 정확히 일치하는지 확인 (API 검색은 '포함' 검색일 수 있음)
-                        // 일치하는게 없으면 첫번째꺼 씀 (대부분 첫번째가 맞음)
-                        OpenApiDto.Row targetRow = rows.get(0);
-
-                        String cDate = targetRow.getCommitteeDt();
-                        // ★ [핵심 수정] 문자열 "null"이거나 진짜 null이면 건너뜀
-                        if (cDate != null && !cDate.isBlank() && !cDate.equals("null")) {
-                            LocalDate committeeDate = LocalDate.parse(cDate, DateTimeFormatter.ISO_DATE);
-                            p.updateFinalDateAndDept(committeeDate.atStartOfDay(), targetRow.getCurrCommittee());
-                            log.info("계류정보 업데이트 성공: [{}] -> 소관위: {}, 회부일: {}", p.getTitle(), targetRow.getCurrCommittee(), committeeDate);
-                        } else {
-                            log.info("계류정보 없음(날짜미정): [{}]", p.getTitle());
-                        }
+            if (row != null) {
+                updateCommitteeInfo(p, row, "계류현황");
+            } else {
+                row = searchPetitionByAge(title, true); // 처리현황 검색
+                if (row != null) {
+                    updateCommitteeInfo(p, row, "처리현황");
+                    String result = row.getProcResultCd();
+                    if (isValid(result)) {
+                        p.updateResult(result);
+                        p.updateStatus(2);
+                        log.info(" >> 처리결과 동시 업데이트 완료: {}", result);
                     }
                 } else {
-                    log.info("계류정보 API 결과 없음: [{}]", p.getTitle());
+                    log.info("API 결과 없음 (계류/처리 모두 부재): [{}]", title);
                 }
-            } catch (Exception e) {
-                log.warn("계류현황 API 처리 중 오류 (청원: {}): {}", p.getTitle(), e.getMessage());
             }
         }
 
-        // 3. 처리결과 업데이트 (Result="-", FinalDate < 오늘)
+        // 3. 처리결과 업데이트
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         List<Petition> processingPetitions = petitionRepo.findByResultAndFinalDateBefore("-", todayStart);
-        log.info("처리결과 업데이트 대상 {}건 조회됨", processingPetitions.size());
 
         for (Petition p : processingPetitions) {
-            try {
-                String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                        assemblyApiKey, "json", 1, 20, "22", null, p.getTitle()
-                );
-
-                OpenApiDto dto = objectMapper.readValue(jsonResponse, OpenApiDto.class);
-                if (dto.getProcessedList() != null && !dto.getProcessedList().isEmpty()) {
-                    List<OpenApiDto.Row> rows = dto.getProcessedList().get(1).getRow();
-                    if (rows != null && !rows.isEmpty()) {
-                        OpenApiDto.Row row = rows.get(0);
-
-                        String resultCd = row.getProcResultCd();
-                        // ★ [핵심 수정] 결과도 "null" 문자열 체크
-                        if (resultCd != null && !resultCd.isBlank() && !resultCd.equals("null")) {
-                            p.updateResult(resultCd);
-                            p.updateStatus(2); // 완료 상태 변경
-                            log.info("처리결과 업데이트(완료): [{}] -> 결과: {}, 상태: 2", p.getTitle(), resultCd);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("처리현황 API 처리 중 오류 (청원: {}): {}", p.getTitle(), e.getMessage());
+            OpenApiDto.Row row = searchPetitionByAge(p.getTitle(), true);
+            if (row != null && isValid(row.getProcResultCd())) {
+                p.updateResult(row.getProcResultCd());
+                p.updateStatus(2);
+                log.info("처리결과 추가 업데이트: [{}] -> {}", p.getTitle(), row.getProcResultCd());
             }
         }
     }
 
-    // [Phase 1~4] 신규 크롤링 (기존 동일)
+    // [Phase 1~4] 신규 크롤링
     private void runCrawlingBatch() {
         LocalDate targetDate = LocalDate.now().minusDays(6);
         log.info(">> [Phase 1] 크롤링 배치 시작. (신규 수집 대상 날짜: {})", targetDate);
@@ -169,6 +140,7 @@ public class PetitionBatchService {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
 
         try {
+            // 1. 엑셀 다운로드
             driver.get("https://assembly.go.kr/portal/cnts/cntsCont/dataA.do?cntsDivCd=PTT&menuNo=600248");
 
             File[] oldFiles = downloadDir.listFiles((dir, name) -> name.startsWith("진행중청원 목록"));
@@ -177,11 +149,11 @@ public class PetitionBatchService {
             WebElement downloadBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("prgsPtt_excel-down")));
             JavascriptExecutor js = (JavascriptExecutor) driver;
             js.executeScript("arguments[0].click();", downloadBtn);
-            log.info("엑셀 다운로드 버튼 클릭 완료");
 
             File excelFile = new File(downloadPath, "진행중청원 목록.xlsx");
             waitForFileDownload(excelFile, 30);
 
+            // 2. 엑셀 파싱
             List<ExcelRowDto> allPetitions = parseExcelAll(excelFile);
             List<ExcelRowDto> newPetitions = new ArrayList<>();
             int updateCount = 0;
@@ -209,6 +181,7 @@ public class PetitionBatchService {
 
             log.info("신규 청원 {}건 발견! 상세 수집을 시작합니다.", newPetitions.size());
 
+            // 3. ★ [복구됨] URL 매핑 (1~8페이지 스캔) - 이게 없어서 에러가 났었습니다!
             Map<String, String> titleUrlMap = new HashMap<>();
             for (int i = 1; i <= 8; i++) {
                 js.executeScript("prgsPttList_search(" + i + ");");
@@ -220,6 +193,7 @@ public class PetitionBatchService {
                 }
             }
 
+            // 4. 상세 크롤링 & 저장
             for (ExcelRowDto dto : newPetitions) {
                 String url = titleUrlMap.get(dto.getTitle().replaceAll("\\s+", ""));
                 if (url == null) url = findUrlByPartialMatch(titleUrlMap, dto.getTitle());
@@ -230,7 +204,24 @@ public class PetitionBatchService {
                 String fullText = extractPetitionContent(driver);
                 if (fullText.isBlank()) continue;
 
-                AiResponseDto aiData = gptService.analyzePetition(fullText);
+                // GPT 분석 (안전 처리)
+                AiResponseDto aiData;
+                try {
+                    aiData = gptService.analyzePetition(fullText);
+                } catch (Exception e) {
+                    log.error("GPT 분석 실패 (청원: {}). 기본값으로 저장", dto.getTitle());
+                    aiData = AiResponseDto.builder()
+                            .subTitle(dto.getTitle())
+                            .needs("AI 분석에 실패하여 원문을 확인해주세요.")
+                            .summary("AI 분석 실패")
+                            .positiveTags(List.of("분석 실패/잠시 후 다시 시도해주세요"))
+                            .negativeTags(List.of("분석 실패/잠시 후 다시 시도해주세요"))
+                            .laws(null)
+                            .build();
+                }
+
+                List<String> posTags = aiData.getPositiveTags() != null ? aiData.getPositiveTags() : new ArrayList<>();
+                List<String> negTags = aiData.getNegativeTags() != null ? aiData.getNegativeTags() : new ArrayList<>();
 
                 Petition p = Petition.builder()
                         .title(dto.getTitle())
@@ -242,8 +233,8 @@ public class PetitionBatchService {
                         .url(url)
                         .petitionNeeds(aiData.getNeeds())
                         .petitionSummary(aiData.getSummary())
-                        .positiveEx(String.join(",", aiData.getPositiveTags()))
-                        .negativeEx(String.join(",", aiData.getNegativeTags()))
+                        .positiveEx(String.join(",", posTags))
+                        .negativeEx(String.join(",", negTags))
                         .type(1).status(0).result("-").department("-").good(0).bad(0).finalDate(null)
                         .build();
 
@@ -253,7 +244,8 @@ public class PetitionBatchService {
                 if (aiData.getLaws() != null) {
                     for (AiResponseDto.LawDto lawDto : aiData.getLaws()) {
                         Laws law = lawsRepo.findByTitle(lawDto.getName())
-                                .orElseGet(() -> lawsRepo.save(Laws.builder().title(lawDto.getName()).summary(lawDto.getContent()).build()));
+                                .orElseGet(() -> lawsRepo.save(Laws.builder()
+                                        .title(lawDto.getName()).summary(lawDto.getContent()).build()));
                         lawsLinkRepo.save(LawsLink.builder().petId(saved.getId()).lawId(law.getId()).build());
                     }
                 }
@@ -263,6 +255,50 @@ public class PetitionBatchService {
         } finally {
             driver.quit();
         }
+    }
+
+    // --- Helpers ---
+
+    private OpenApiDto.Row searchPetitionByAge(String title, boolean isProcessed) {
+        OpenApiDto.Row row = searchApi(title, "22", isProcessed);
+        return (row != null) ? row : searchApi(title, "21", isProcessed);
+    }
+
+    private OpenApiDto.Row searchApi(String dbTitle, String age, boolean isProcessed) {
+        try {
+            String jsonResponse = isProcessed
+                    ? openAssemblyClient.getProcessedPetitions(assemblyApiKey, "json", 1, 100, age, null, null)
+                    : openAssemblyClient.getPendingPetitions(assemblyApiKey, "json", 1, 100, age, null);
+
+            OpenApiDto dto = objectMapper.readValue(jsonResponse, OpenApiDto.class);
+            List<OpenApiDto.Row> rows = isProcessed
+                    ? (dto.getProcessedList() != null && !dto.getProcessedList().isEmpty() ? dto.getProcessedList().get(1).getRow() : null)
+                    : (dto.getPendingList() != null && !dto.getPendingList().isEmpty() ? dto.getPendingList().get(1).getRow() : null);
+
+            if (rows != null) {
+                String normDbTitle = dbTitle.replaceAll("\\s+", "");
+                for (OpenApiDto.Row r : rows) {
+                    String normApiTitle = r.getBillName().replaceAll("\\s+", "");
+                    if (normDbTitle.contains(normApiTitle) || normApiTitle.contains(normDbTitle)) {
+                        return r;
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return null;
+    }
+
+    private void updateCommitteeInfo(Petition p, OpenApiDto.Row row, String source) {
+        String cDate = row.getCommitteeDt();
+        if (isValid(cDate)) {
+            LocalDate date = LocalDate.parse(cDate, DateTimeFormatter.ISO_DATE);
+            p.updateFinalDateAndDept(date.atStartOfDay(), row.getCurrCommittee());
+            log.info("[{}] 업데이트: [{}] -> 소관위: {}, 회부일: {}", source, p.getTitle(), row.getCurrCommittee(), date);
+        }
+    }
+
+    private boolean isValid(String str) {
+        return str != null && !str.isBlank() && !str.equals("null");
     }
 
     private List<ExcelRowDto> parseExcelAll(File file) {
@@ -279,9 +315,7 @@ public class PetitionBatchService {
                     String[] dates = period.split(" ~ ");
                     LocalDate startDate = LocalDate.parse(dates[0].trim(), DateTimeFormatter.ISO_DATE);
                     LocalDate endDate = LocalDate.parse(dates[1].trim(), DateTimeFormatter.ISO_DATE);
-                    int allows = 0;
-                    if (row.getCell(4).getCellType() == CellType.NUMERIC) allows = (int) row.getCell(4).getNumericCellValue();
-                    else allows = Integer.parseInt(row.getCell(4).getStringCellValue().replace(",", ""));
+                    int allows = (row.getCell(4).getCellType() == CellType.NUMERIC) ? (int) row.getCell(4).getNumericCellValue() : Integer.parseInt(row.getCell(4).getStringCellValue().replace(",", ""));
                     result.add(ExcelRowDto.builder().category(category).title(title).voteStartDate(startDate.atStartOfDay()).voteEndDate(endDate.atStartOfDay()).allows(allows).build());
                 } catch (Exception e) {}
             }

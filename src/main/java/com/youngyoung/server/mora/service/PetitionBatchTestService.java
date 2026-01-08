@@ -60,8 +60,9 @@ public class PetitionBatchTestService {
     public void createDummyPendingPetitions() {
         log.info(">>>> [TEST] 계류현황 API 5개 가져와서 '소관위 미정' 상태로 저장 시작");
         try {
+            // ★ [수정됨] 파라미터 개수 맞춤 (AGE 자리에 null 전달)
             String jsonResponse = openAssemblyClient.getPendingPetitions(
-                    assemblyApiKey, "json", 1, 5, null
+                    assemblyApiKey, "json", 1, 5, null, null
             );
             processAndSaveTestPetitions(jsonResponse, false);
         } catch (Exception e) {
@@ -122,7 +123,6 @@ public class PetitionBatchTestService {
 
                 // 1. 소관위 (Department)
                 String department = row.getCurrCommittee();
-                // API 값이 없거나 "null" 문자열이면 기본값 "-" 사용
                 if (department == null || department.isBlank() || department.equals("null")) {
                     department = "-";
                 }
@@ -130,16 +130,12 @@ public class PetitionBatchTestService {
                 // 2. 회부일 (FinalDate)
                 LocalDateTime finalDate = parseDate(row.getCommitteeDt());
 
-                // [처리현황 테스트인 경우]
-                // API에 날짜가 있으면 그대로 쓰고(finalDate),
-                // 없으면(null) -> '업데이트 로직 테스트'를 위해 강제로 과거 날짜를 부여
+                // [처리현황 테스트인 경우] -> 강제 과거 날짜 부여
                 if (isProcessedData && finalDate == null) {
                     finalDate = LocalDateTime.now().minusMonths(6);
                 }
 
-                // [계류현황 테스트인 경우]
-                // API에 날짜가 있으면 그대로 쓰고,
-                // 없으면(null) -> '소관위/날짜 업데이트 로직 테스트'를 위해 null 상태 유지 (그래야 배치에서 잡힘)
+                // [계류현황 테스트인 경우] -> 그대로 null 유지 (업데이트 대상이 되기 위해)
 
                 // 저장
                 Petition petition = Petition.builder()
@@ -152,8 +148,8 @@ public class PetitionBatchTestService {
                         .type(1)
                         .status(1)        // 1: 종료된 상태
                         .result("-")      // "-": 결과 미정
-                        .department(department) // ★ API 값 우선 적용
-                        .finalDate(finalDate)   // ★ API 값 우선 적용
+                        .department(department)
+                        .finalDate(finalDate)
                         .good(0)
                         .bad(0)
                         .url(targetUrl)
