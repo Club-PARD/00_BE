@@ -19,8 +19,8 @@ public class PetitionRes {
         private String petitionSummary;
         private Integer status;
         private String category;
-        private LocalDateTime voteStartDate;
         private LocalDateTime finalDate;
+        private LocalDateTime voteStartDate;
         private LocalDateTime voteEndDate;
         private String result;
         private String positiveEx;

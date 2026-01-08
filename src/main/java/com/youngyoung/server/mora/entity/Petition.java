@@ -80,4 +80,11 @@ public class Petition {
     public void updateAllows(Integer allows) {
         this.allows = allows;
     }
+
+    public void updateStatus(Integer status) { this.status = status; }
+    public void updateFinalDateAndDept(LocalDateTime date, String dept) {
+        this.finalDate = date;
+        this.department = dept;
+    }
+    public void updateResult(String result) { this.result = result; }
 }

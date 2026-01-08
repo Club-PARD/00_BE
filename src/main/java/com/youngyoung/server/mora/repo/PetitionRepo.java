@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.awt.print.Pageable;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -50,4 +51,13 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
     PetitionRes.PetitionInfo findByPetId(Long id);
 
     Petition findById(Long petId);
+
+    // 종료된 청원 찾기 (status=0 이면서 종료일이 지난 것)
+    List<Petition> findAllByStatusAndVoteEndDateBefore(Integer status, LocalDateTime now);
+
+    // 계류현황 업데이트 대상 (status=1, finalDate=null)
+    List<Petition> findByStatusAndFinalDateIsNull(Integer status);
+
+    // 처리결과 업데이트 대상 (result="-", finalDate가 과거인 것)
+    List<Petition> findByResultAndFinalDateBefore(String result, LocalDateTime now);
 }
