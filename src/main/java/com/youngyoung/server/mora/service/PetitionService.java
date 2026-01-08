@@ -75,9 +75,9 @@ public class PetitionService {
 
         // 경우의 수 나누기 (how == 0: 인기순, how == 1: 최신순)
         if (how == 0) {
-            entityList = petitionRepo.findCardNewsPopular(type, status, categories, keyWord, pageSize, offset);
+            entityList = petitionRepo.findCardNewsPopular(type, status, categories, processedKeyWord, pageSize, offset);
         } else {
-            entityList = petitionRepo.findCardNewsRecent(type, status, categories, keyWord, pageSize, offset);
+            entityList = petitionRepo.findCardNewsRecent(type, status, categories, processedKeyWord, pageSize, offset);
         }
 
         // Entity -> DTO 변환
