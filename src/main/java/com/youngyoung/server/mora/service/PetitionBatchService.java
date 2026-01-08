@@ -108,7 +108,8 @@ public class PetitionBatchService {
             OpenApiDto.Row row = searchPetitionByAge(p.getTitle(), true);
             if (row != null && isValid(row.getProcResultCd())) {
                 p.updateResult(row.getProcResultCd());
-                p.updateStatus(2);
+                //status 1로 고정
+                //p.updateStatus(2);
                 log.info("처리결과 추가 업데이트: [{}] -> {}", p.getTitle(), row.getProcResultCd());
             }
         }
