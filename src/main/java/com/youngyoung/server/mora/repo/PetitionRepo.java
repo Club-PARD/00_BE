@@ -53,14 +53,17 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
 
     Petition findById(Long petId);
 
-    // 종료된 청원 찾기 (status=0 이면서 종료일이 지난 것)
+    Optional<Petition> findByTitle(String title);
+
+    // 투표 기간이 끝난 청원 찾기 (status=0, 날짜 지남)
     List<Petition> findAllByStatusAndVoteEndDateBefore(Integer status, LocalDateTime now);
 
-    // 계류현황 업데이트 대상 (status=1, finalDate=null)
+    // 계류정보 업데이트 대상 (status=1, finalDate 없음)
     List<Petition> findByStatusAndFinalDateIsNull(Integer status);
 
-    // 처리결과 업데이트 대상 (result="-", finalDate가 과거인 것)
-    List<Petition> findByResultAndFinalDateBefore(String result, LocalDateTime now);
+    // 상태가 1이고 소관위가 아직 배정 안 된("-") 청원 찾기
+    List<Petition> findByStatusAndDepartment(Integer status, String department);
 
-    Optional<Petition> findByTitle(String title);
+    // 처리결과 업데이트용
+    List<Petition> findByResultAndFinalDateBefore(String result, LocalDateTime date);
 }

@@ -12,11 +12,11 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OpenApiDto {
 
-    // 계류현황 루트
+    // 1. 계류현황 리스트 (메인 서비스에서 사용)
     @JsonProperty("nvqbafvaajdiqhehi")
     private List<HeadRowWrapper> pendingList;
 
-    // 처리현황 루트
+    // 2. 처리현황 리스트 (테스트 서비스 & 메인 서비스에서 사용)
     @JsonProperty("ncryefyuaflxnqbqo")
     private List<HeadRowWrapper> processedList;
 
@@ -24,7 +24,7 @@ public class OpenApiDto {
     @Setter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class HeadRowWrapper {
-        private List<Row> row; // 실제 데이터 리스트
+        private List<Row> row;
     }
 
     @Getter
@@ -37,8 +37,14 @@ public class OpenApiDto {
         @JsonProperty("CURR_COMMITTEE") // 소관위
         private String currCommittee;
 
-        @JsonProperty("COMMITTEE_DT") // 위원회 회부일 (String: "2024-01-01")
+        @JsonProperty("PROPOSE_DT") // 제안일
+        private String proposeDt;
+
+        @JsonProperty("COMMITTEE_DT") // 회부일
         private String committeeDt;
+
+        @JsonProperty("LINK_URL") // 상세 URL
+        private String linkUrl;
 
         @JsonProperty("PROC_RESULT_CD") // 의결 결과
         private String procResultCd;

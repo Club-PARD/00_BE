@@ -20,7 +20,7 @@ import java.util.Arrays;
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-
+    private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
     private final PrincipalOauth2UserService principalOauth2UserService;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final JwtTokenProvider jwtTokenProvider; // 👈 주입받기
@@ -52,6 +52,10 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo.userService(principalOauth2UserService))
                         .successHandler(oAuth2LoginSuccessHandler)
+
+                        .authorizationEndpoint(endpoint -> endpoint
+                                .authorizationRequestRepository(httpCookieOAuth2AuthorizationRequestRepository)
+                        )
                 )
                 // ⭐️ [여기가 핵심] UsernamePasswordAuthenticationFilter 앞에 JWT 필터를 끼워넣음
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
@@ -67,7 +71,8 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://54.180.32.70.nip.io:3000",
-                "http://172.30.1.16.nip.io:3000",
+                "http://172.17.213.32.nip.io:3000",
+                "http://172.17.195.15.nip.io:3000",
                 "https://00-fe.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

@@ -42,7 +42,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         String targetOrigin = authorizationRequestRepository
                 .getRedirectOrigin(request)
-                .orElse("https://00-fe.vercel.app/"); // 프론트 주소
+                .orElse("http://172.17.213.32.nip.io:3000"); // 프론트 주소
 
         // 1. 신규 유저인 경우 (DB에 없음)
         if (isNewUser) {
