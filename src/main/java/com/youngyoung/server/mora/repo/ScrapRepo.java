@@ -29,4 +29,6 @@ public interface ScrapRepo extends JpaRepository<Scrap,Long> {
             "FROM Scrap s JOIN User u ON s.userId = u.id " +
             "WHERE s.petId = :petitionId")
     List<UserRes.EmailInfo> findEmailByPetId(Long petitionId);
+
+    List<Scrap> findAllByUserId(UUID id);
 }
