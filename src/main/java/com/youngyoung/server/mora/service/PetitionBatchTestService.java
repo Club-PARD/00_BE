@@ -61,10 +61,10 @@ public class PetitionBatchTestService {
     // ======================================================================
     @Transactional
     public void createDummyProcessedPetitions() {
-        log.info(">>>> [TEST] 처리현황 API(22대) 5개 가져와서 저장 시작");
+        log.info(">>>> [TEST] 처리현황 API(21대) 30개 가져와서 저장 시작");
         try {
             String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                    assemblyApiKey, "json", 1, 5, "22", "국민동의청원", null
+                    assemblyApiKey, "json", 1, 30, "21", "국민동의청원", null
             );
             processAndSaveTestPetitions(jsonResponse, true);
         } catch (Exception e) {
@@ -77,10 +77,10 @@ public class PetitionBatchTestService {
     // ======================================================================
     @Transactional
     public void createDummyPendingPetitions() {
-        log.info(">>>> [TEST] 계류현황 API 5개 가져와서 저장 시작");
+        log.info(">>>> [TEST] 계류현황 API 30개 가져와서 저장 시작");
         try {
             String jsonResponse = openAssemblyClient.getPendingPetitions(
-                    assemblyApiKey, "json", 1, 5, null, null
+                    assemblyApiKey, "json", 1, 30, null, null
             );
             processAndSaveTestPetitions(jsonResponse, false);
         } catch (Exception e) {
@@ -298,10 +298,10 @@ public class PetitionBatchTestService {
                     result = "-";
                 }
 
-                // ★ [수정됨] 4. 동의자 수 (Allows) - "김태인외 50,060인" 파싱
+                // 4. 동의자 수 (Allows) - "김태인외 50,060인" 파싱
                 int allows = extractAllowsFromProposer(row.getProposer());
 
-                // ★ [수정됨] 5. 카테고리 - "기타"로 변경
+                // 5. 카테고리 - "기타"로 변경
                 String category = "기타";
 
                 Petition petition = Petition.builder()
@@ -342,7 +342,7 @@ public class PetitionBatchTestService {
         }
     }
 
-    // ★ [추가] 동의자 수 파싱 헬퍼 메소드
+    // 동의자 수 파싱 헬퍼 메소드
     private int extractAllowsFromProposer(String proposer) {
         if (proposer == null || proposer.isBlank()) return 0;
         try {
