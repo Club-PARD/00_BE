@@ -66,4 +66,23 @@ public interface PetitionRepo extends JpaRepository<Petition, Integer> {
 
     // 처리결과 업데이트용
     List<Petition> findByResultAndFinalDateBefore(String result, LocalDateTime date);
+
+    // 기간이 만료되었거나(OR) 동의수 5만을 달성한 '진행중(0)' 청원 조회
+    @Query("SELECT p FROM Petition p " +
+            "WHERE p.status = :status " +
+            "AND p.type = :type " +
+            "AND (p.voteEndDate < :now OR p.allows >= 50000)")
+    List<Petition> findPetitionsToClose(
+            @Param("status") Integer status,
+            @Param("type") Integer type,
+            @Param("now") LocalDateTime now);
+
+    // 1. [Type 0용] 기간 만료 조회 (Type, Status, Date 조건)
+    List<Petition> findAllByStatusAndTypeAndVoteEndDateBefore(Integer status, Integer type, LocalDateTime date);
+
+    // 2. [Type 0용] 결과 미정 조회 (Status=1, Type=0, Result="-")
+    List<Petition> findByStatusAndTypeAndResult(Integer status, Integer type, String result);
+
+    // Type=1이면서 결과가 나온(Result != "-") 청원 조회
+    List<Petition> findByTypeAndResultNot(Integer type, String result);
 }

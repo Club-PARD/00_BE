@@ -65,19 +65,127 @@ public class PetitionBatchService {
     @Transactional
     public void runBatch() {
         log.info("========== [Mora Batch] 작업 시작 ==========");
+
+        // 1. 국회 청원 (Type 1) 업데이트
         updatePetitionStatusAndResult();
+
+        // 2. 청원24 (Type 0) 업데이트 -> 할 수 있으나 크롤링 가능 여부를 확인하지 못함
+        //updateCheongwon24();
+
+        // 3. 신규 크롤링 (Type 1 - 엑셀)
         runCrawlingBatch();
+
         log.info("========== [Mora Batch] 작업 종료 ==========");
     }
 
-    // [Phase 0] 기존 데이터 업데이트 (API + 22/21대 통합 검색)
+    // ======================================================================
+    // [Phase 0-0] 청원24 상태 및 결과 업데이트
+    // ======================================================================
+    private void updateCheongwon24() {
+        log.info(">> [Cheongwon24] 청원24(Type=0) 업데이트 시작");
+
+        // 1. 기간 만료 처리 (Status: 0 -> 1)
+        // 조건: Type=0, Status=0, EndDate < Now (5만명 조건 없음)
+        List<Petition> expiredList = petitionRepo.findAllByStatusAndTypeAndVoteEndDateBefore(0, 0, LocalDateTime.now());
+        for (Petition p : expiredList) {
+            p.updateStatus(1);
+        }
+        log.info("청원24 기간 만료 {}건 상태 변경 완료 (0->1)", expiredList.size());
+
+        // 2. 결과 업데이트 (Status=1, Result="-", Type=0)
+        List<Petition> pendingList = petitionRepo.findByStatusAndTypeAndResult(1, 0, "-");
+        if (pendingList.isEmpty()) {
+            log.info("청원24 결과 업데이트 대상 없음");
+            return;
+        }
+
+        log.info("청원24 결과 확인 대상 {}건 크롤링 시작", pendingList.size());
+
+        // Selenium 설정
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless=new");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--lang=ko_KR");
+        options.addArguments("--window-size=1920,1080");
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+        WebDriver driver = new ChromeDriver(options);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        try {
+            for (Petition p : pendingList) {
+                try {
+                    driver.get(p.getUrl());
+                    wait.until(ExpectedConditions.presenceOfElementLocated(By.tagName("body")));
+                    Thread.sleep(1500); // 로딩 대기
+
+                    String bodyText = driver.findElement(By.tagName("body")).getText();
+
+                    // 조건: "<청원 처리결과>" 텍스트가 존재하는지 확인
+                    if (bodyText.contains("<청원 처리결과>")) {
+                        String result = "답변 처리";
+                        LocalDateTime finalDate = null;
+
+                        // 날짜 파싱: "청원 처리결과 통지일자 : 2026. 01. 07."
+                        // 정규식: 통지일자\s*:\s*([0-9. ]+)
+                        Pattern pattern = Pattern.compile("청원 처리결과 통지일자\\s*:\\s*([0-9.\\s]+)");
+                        Matcher matcher = pattern.matcher(bodyText);
+
+                        if (matcher.find()) {
+                            String dateStr = matcher.group(1).trim();
+                            // "2026. 01. 07." -> "2026-01-07" 변환 (공백 및 점 제거)
+                            dateStr = dateStr.replace(" ", "").replace(".", "-");
+                            // 마지막에 "-"가 남을 수 있으므로 제거 (2026-01-07-)
+                            if (dateStr.endsWith("-")) dateStr = dateStr.substring(0, dateStr.length() - 1);
+
+                            try {
+                                finalDate = LocalDate.parse(dateStr, DateTimeFormatter.ISO_DATE).atStartOfDay();
+                            } catch (Exception e) {
+                                log.warn("청원24 날짜 파싱 실패 [{}]: {}", p.getTitle(), dateStr);
+                                finalDate = LocalDateTime.now(); // 실패 시 오늘 날짜
+                            }
+                        }
+
+                        // DB 업데이트
+                        p.updateResult(result);
+                        if (finalDate != null) {
+                            // 소관위(department)는 기존 값 유지
+                            p.updateFinalDateAndDept(finalDate, p.getDepartment());
+                        }
+
+                        log.info("청원24 결과 업데이트 완료: [{}] -> {}", p.getTitle(), result);
+
+                        // 이메일 발송
+                        sendEmailToScrappers(p, result);
+                    }
+
+                } catch (Exception e) {
+                    log.error("청원24 크롤링 중 개별 오류 [ID: {}]: {}", p.getId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("청원24 배치 전체 오류", e);
+        } finally {
+            driver.quit();
+        }
+    }
+
+    // [Phase 0-1] 기존 데이터 업데이트 (API + 22/21대 통합 검색)
     private void updatePetitionStatusAndResult() {
         log.info(">> [Phase 0] 기존 청원 상태 및 결과 업데이트 시작");
 
         // 1. 기간 만료 처리
-        List<Petition> expiredPetitions = petitionRepo.findAllByStatusAndVoteEndDateBefore(0, LocalDateTime.now());
-        for (Petition p : expiredPetitions) p.updateStatus(1);
-        log.info("기간 만료 청원 {}건 상태 변경 완료 (0->1)", expiredPetitions.size());
+        List<Petition> petitionsToClose = petitionRepo.findPetitionsToClose(0, 1, LocalDateTime.now());if (!petitionsToClose.isEmpty()) {
+            for (Petition p : petitionsToClose) {
+                p.updateStatus(1);
+            }
+            log.info("기간 만료 또는 5만명 달성으로 청원 {}건 상태 변경 완료 (0->1)", petitionsToClose.size());
+        } else {
+            log.info("상태 변경 대상 청원 없음.");
+        }
+        log.info("기간 만료 청원 {}건 상태 변경 완료 (0->1)", petitionsToClose.size());
 
         // 2. 계류정보 업데이트
         List<Petition> pendingPetitions = petitionRepo.findByStatusAndDepartment(1, "-");

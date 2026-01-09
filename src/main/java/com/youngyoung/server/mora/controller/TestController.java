@@ -53,11 +53,19 @@ public class TestController {
         return petitionBatchTestService.resetPetitionForEmailTest(email);
     }
 
-    // 6. ★ [추가] 청원24(cheongwon.go.kr) 단일 링크 크롤링 및 저장
+    // 6. 청원24(cheongwon.go.kr) 단일 링크 크롤링 및 저장
     // 사용법: /test/cheongwon24?url=https://cheongwon.go.kr/...
     @GetMapping("/cheongwon24")
     public String createFromCheongwon24(@RequestParam("url") String url) {
         petitionBatchTestService.createFromCheongwon24(url);
         return "청원24 데이터 수집 및 저장 작업이 백그라운드에서 시작되었습니다. 로그를 확인하세요.";
+    }
+
+    // 7. 기존 완료된 청원들의 날짜(3개) 강제 업데이트 (보정용)
+    // 사용법: /test/fix-dates
+    @GetMapping("/fix-dates")
+    public String fixPetitionDates() {
+        petitionBatchTestService.fixExistingPetitionDates();
+        return "기존 완료 청원들의 날짜 보정 작업이 백그라운드에서 시작되었습니다. 로그를 확인하세요.";
     }
 }

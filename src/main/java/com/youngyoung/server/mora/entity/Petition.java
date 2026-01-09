@@ -87,4 +87,10 @@ public class Petition {
         this.department = dept;
     }
     public void updateResult(String result) { this.result = result; }
+
+    // 투표 기간 업데이트 편의 메소드
+    public void updateVoteDates(LocalDateTime start, LocalDateTime end) {
+        this.voteStartDate = start;
+        this.voteEndDate = end;
+    }
 }

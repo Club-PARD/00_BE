@@ -69,9 +69,9 @@ public class PetitionBatchTestService {
         try {
             // 처리현황 API는 파라미터로 "국민동의청원" 필터링 가능
             String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                    assemblyApiKey, "json", 1, 10, "22", "국민동의청원", null
+                    assemblyApiKey, "json", 1, 50, "22", "국민동의청원", null
             );
-            processAndSaveTestPetitions(jsonResponse, true, 5);
+            processAndSaveTestPetitions(jsonResponse, true, 30);
         } catch (Exception e) {
             log.error("처리현황 테스트 데이터 생성 중 오류", e);
         }
@@ -465,6 +465,129 @@ public class PetitionBatchTestService {
         } finally {
             driver.quit();
         }
+    }
+
+    // ======================================================================
+    // 6. [보정용] 기존 완료된 청원들의 날짜(VoteStart, VoteEnd, Final) 수정
+    // ======================================================================
+    @Async
+    @Transactional
+    public void fixExistingPetitionDates() {
+        log.info(">>>> [FIX] 기존 완료 청원 날짜 보정 작업 시작");
+
+        // 1. 대상 조회: Type=1(국회) 이면서 결과가 있는(Result != "-") 청원들
+        List<Petition> targets = petitionRepo.findByTypeAndResultNot(1, "-");
+        log.info("보정 대상 청원 수: {}개", targets.size());
+
+        if (targets.isEmpty()) return;
+
+        // Selenium 설정 (한 번만 켜서 재사용)
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless=new");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--lang=ko_KR");
+        options.addArguments("--window-size=1920,1080");
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+        WebDriver driver = new ChromeDriver(options);
+
+        try {
+            int count = 0;
+            for (Petition p : targets) {
+                count++;
+                log.info("[{}/{}] 보정 중: {}", count, targets.size(), p.getTitle());
+
+                // -------------------------------------------------
+                // A. API 재조회 -> finalDate (회부일) 수정
+                // -------------------------------------------------
+                LocalDateTime newFinalDate = p.getFinalDate(); // 기본은 기존값 유지
+                try {
+                    // API에서 22대/21대 모두 검색
+                    OpenApiDto.Row row = searchApiForFix(p.getTitle(), "22");
+                    if (row == null) row = searchApiForFix(p.getTitle(), "21");
+
+                    if (row != null) {
+                        // COMMITTEE_DT(회부일)가 있으면 그걸로 교체
+                        LocalDateTime apiDate = parseDate(row.getCommitteeDt());
+                        if (apiDate != null) {
+                            newFinalDate = apiDate;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("API 조회 실패: {}", p.getTitle());
+                }
+
+                // -------------------------------------------------
+                // B. 크롤링 -> voteStartDate, voteEndDate 수정
+                // -------------------------------------------------
+                LocalDateTime newStartDate = p.getVoteStartDate();
+                LocalDateTime newEndDate = p.getVoteEndDate();
+
+                try {
+                    driver.get(p.getUrl());
+                    // 상세 페이지 로딩 대기 (너무 빠르면 차단될 수 있으니 1초 대기)
+                    Thread.sleep(1000);
+
+                    // 기존에 만들어둔 extractVoteDates 메소드 재활용
+                    LocalDateTime[] voteDates = extractVoteDates(driver);
+
+                    if (voteDates != null) {
+                        newStartDate = voteDates[0];
+                        newEndDate = voteDates[1];
+                    }
+                } catch (Exception e) {
+                    log.warn("크롤링 실패: {}", p.getTitle());
+                }
+
+                // -------------------------------------------------
+                // C. DB 업데이트 (Dirty Checking으로 자동 저장됨)
+                // -------------------------------------------------
+                // Entity에 updateDates 편의 메소드를 추가하거나, Setter 사용 (여기선 Setter 가정)
+                // * Petition Entity에 아래 메소드들이 없다면 추가 필요 *
+
+                // 1. finalDate 업데이트 (Department는 기존꺼 유지)
+                p.updateFinalDateAndDept(newFinalDate, p.getDepartment());
+
+                // 2. 투표 기간 업데이트 (Entity에 메소드 추가 필요, 없으면 아래처럼 직접 수정 불가)
+                // -> Petition Entity에 updateVoteDates 메소드를 추가해주세요!
+                p.updateVoteDates(newStartDate, newEndDate);
+
+                log.info(" -> 업데이트 완료 (Start: {}, End: {}, Final: {})",
+                        newStartDate.toLocalDate(), newEndDate.toLocalDate(),
+                        (newFinalDate != null ? newFinalDate.toLocalDate() : "null"));
+            }
+        } catch (Exception e) {
+            log.error("보정 작업 중 치명적 오류", e);
+        } finally {
+            driver.quit();
+            log.info(">>>> [FIX] 보정 작업 종료");
+        }
+    }
+
+    // [보정용 Helper] API 검색 (기존 로직 단순화)
+    private OpenApiDto.Row searchApiForFix(String title, String age) {
+        try {
+            // 처리현황 API 조회
+            String jsonResponse = openAssemblyClient.getProcessedPetitions(
+                    assemblyApiKey, "json", 1, 100, age, null, null
+            );
+            OpenApiDto dto = objectMapper.readValue(jsonResponse, OpenApiDto.class);
+
+            if (dto.getProcessedList() != null && !dto.getProcessedList().isEmpty()) {
+                List<OpenApiDto.Row> rows = dto.getProcessedList().get(1).getRow();
+                String normDbTitle = title.replaceAll("\\s+", "");
+
+                for (OpenApiDto.Row r : rows) {
+                    String normApiTitle = r.getBillName().replaceAll("\\s+", "");
+                    if (normDbTitle.contains(normApiTitle) || normApiTitle.contains(normDbTitle)) {
+                        return r;
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return null;
     }
 
     // ======================================================================

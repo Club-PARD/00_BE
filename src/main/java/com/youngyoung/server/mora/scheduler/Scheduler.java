@@ -12,7 +12,7 @@ public class Scheduler {
 
     private final PetitionBatchService petitionBatchService;
 
-    @Scheduled(cron = "0 0 0 * * *") // 매일 자정
+    @Scheduled(cron = "0 10 0 * * *") // 매일 자정
     public void scheduleRun() {
         petitionBatchService.runBatch();
     }
