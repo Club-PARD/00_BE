@@ -14,6 +14,7 @@ public interface CommentRepo extends JpaRepository<Comment,Long> {
     SELECT new com.youngyoung.server.mora.dto.PetitionRes$CommentInfo(
         c.id,
         u.name,
+        u.status,
         c.body,
         CASE WHEN (:myId IS NOT NULL AND c.userId = :myId) THEN true ELSE false END
     )

@@ -87,6 +87,7 @@ public class PetitionRes {
     public static class CommentInfo {
         private Long id;
         private String name;
+        private Integer status;
         private String body;
         private Boolean check;
     }
