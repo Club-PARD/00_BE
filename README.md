@@ -50,7 +50,7 @@
 
 ```bash
 # 프로젝트 클론
-git clone https://github.com/your-username/mora.git
+git clone https://github.com/Club-PARD/00_BE.git
 cd mora
 ```
 
@@ -60,63 +60,83 @@ cd mora
 
 ```yaml
 spring:
+  application:
+    name: youngyoung.server.mora
+
+  logging:
+    level:
+      root: info
+
   datasource:
-    url: jdbc:mysql://localhost:3306/your_db_name?useUnicode=true&characterEncoding=UTF-8
-    username: your_db_username
-    password: your_db_password
     driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://{DB}:3306/YY_mora?serverTimezone=UTC&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+    username: {name}
+    password: {PW}
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: "{EMAIL}"
+    password: "{PW}"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
   jpa:
+    show-sql: true
+    database-platform: org.hibernate.dialect.MySQLDialect
+    database: mysql
     hibernate:
       ddl-auto: update
+    generate-ddl: false
     properties:
       hibernate:
         format_sql: true
+        enable_lazy_load_no_trans: true
+
   security:
     oauth2:
       client:
         registration:
           google:
-            client-id: your-google-client-id
-            client-secret: your-google-client-secret
+            client-id: {ID}
+            client-secret: {SECRET}
+            redirect-uri: {BASE}/login/oauth2/code/google
             scope:
               - profile
               - email
-          naver:
-            client-id: your-naver-client-id
-            client-secret: your-naver-client-secret
-            authorization-grant-type: authorization_code
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            client-name: Naver
-            scope:
-              - name
-              - email
-        provider:
-          naver:
-            authorization-uri: https://nid.naver.com/oauth2.0/authorize
-            token-uri: https://nid.naver.com/oauth2.0/token
-            user-info-uri: https://openapi.naver.com/v1/nid/me
-            user-name-attribute: response
-
-jwt:
-  secret: your-jwt-secret-key
 
 openai:
-  api-key: your-openai-api-key
+  api:
+    key: {KEY}
+  model: gpt-4o-mini
+
+open-api:
+  assembly:
+    key: {KEY}
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.web.client.RestTemplate: DEBUG
+    org.springframework.security.oauth2.client: DEBUG
 ```
 
 ### 4. 애플리케이션 실행
 
-```bash
-./gradlew build
-java -jar build/libs/mora-0.0.1-SNAPSHOT.jar
-```
-
-애플리케이션이 실행되면 `http://localhost:8080`에서 확인할 수 있습니다.
+애플리케이션이 실행되면 `https://00-fe.vercel.app`에서 확인할 수 있습니다.
 
 ## 📝 API 엔드포인트
 
 Swagger UI를 통해 모든 API 엔드포인트와 명세를 확인할 수 있습니다.
-- **Swagger UI**: `http://localhost:8080/swagger-ui/index.html`
+- **Swagger UI**: `https://moragora.site/swagger-ui/index.html#/`
 
 ### 주요 엔드포인트:
 
