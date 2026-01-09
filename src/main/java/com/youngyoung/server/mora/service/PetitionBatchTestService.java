@@ -69,9 +69,9 @@ public class PetitionBatchTestService {
         try {
             // 처리현황 API는 파라미터로 "국민동의청원" 필터링 가능
             String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                    assemblyApiKey, "json", 1, 10, "22", "국민동의청원", null
+                    assemblyApiKey, "json", 1, 30, "22", "국민동의청원", null
             );
-            processAndSaveTestPetitions(jsonResponse, true, 5);
+            processAndSaveTestPetitions(jsonResponse, true, 30);
         } catch (Exception e) {
             log.error("처리현황 테스트 데이터 생성 중 오류", e);
         }
@@ -87,10 +87,10 @@ public class PetitionBatchTestService {
         try {
             // ★ [수정] 필터링을 위해 넉넉하게 50개를 가져옴 (파라미터로 필터링이 안 되므로)
             String jsonResponse = openAssemblyClient.getPendingPetitions(
-                    assemblyApiKey, "json", 1, 50, null, null
+                    assemblyApiKey, "json", 1, 30, null, null
             );
-            // 내부 로직에서 "국민동의청원"인지 확인하고 5개만 저장
-            processAndSaveTestPetitions(jsonResponse, false, 5);
+            // 내부 로직에서 "국민동의청원"인지 확인하고 30개만 저장
+            processAndSaveTestPetitions(jsonResponse, false, 30);
         } catch (Exception e) {
             log.error("계류현황 테스트 데이터 생성 중 오류", e);
         }
