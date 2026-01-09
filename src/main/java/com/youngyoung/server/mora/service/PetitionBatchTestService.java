@@ -287,6 +287,187 @@ public class PetitionBatchTestService {
     }
 
     // ======================================================================
+    // 5. [테스트용] 청원24(cheongwon.go.kr) 단일 링크 크롤링 (텍스트 파싱 방식)
+    // ======================================================================
+    @Async
+    @Transactional
+    public void createFromCheongwon24(String targetUrl) {
+        log.info(">>>> [TEST] 청원24 크롤링 시작: {}", targetUrl);
+
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless=new");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--lang=ko_KR");
+        options.addArguments("--window-size=1920,1080");
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+        WebDriver driver = new ChromeDriver(options);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        try {
+            driver.get(targetUrl);
+            wait.until(ExpectedConditions.presenceOfElementLocated(By.tagName("body")));
+            Thread.sleep(2000);
+
+            // 페이지 전체 텍스트 가져오기
+            String bodyText = driver.findElement(By.tagName("body")).getText();
+            String[] lines = bodyText.split("\n");
+
+            // 1. 제목 (Title) - "처리기관" 바로 윗줄 찾기
+            String title = "제목 파싱 실패";
+            for (int i = 0; i < lines.length; i++) {
+                if (lines[i].contains("처리기관") && i > 0) {
+                    // "처리기관"이 있는 줄의 바로 윗줄이 제목일 확률 99%
+                    String candidate = lines[i-1].trim();
+
+                    // 만약 윗줄이 "종결", "처리 중" 같은 상태값이라면 그 윗줄을 다시 확인
+                    if (candidate.equals("종결") || candidate.equals("처리 중") || candidate.equals("의견수렴 중") || candidate.equals("접수")) {
+                        if (i > 1) candidate = lines[i-2].trim();
+                    }
+
+                    title = candidate;
+                    break;
+                }
+            }
+            // 그래도 실패하면 기존 방식 시도
+            if (title.equals("제목 파싱 실패")) {
+                try {
+                    title = driver.findElement(By.cssSelector(".view_tit")).getText().trim();
+                    if (title.contains("\n")) title = title.split("\n")[title.split("\n").length - 1].trim();
+                } catch (Exception e) {}
+            }
+
+            // 2. 처리기관 (Department)
+            String department = "-";
+            for (String line : lines) {
+                if (line.contains("처리기관") && line.contains(":")) {
+                    department = line.split(":")[1].trim(); // "처리기관: 조달청..." -> "조달청..."
+                    break;
+                }
+            }
+
+            // 3. 의견 수렴 기간 (Vote Date)
+            LocalDateTime startDate = LocalDateTime.now();
+            LocalDateTime endDate = LocalDateTime.now().plusDays(30);
+            for (String line : lines) {
+                if (line.contains("의견 수렴 기간")) {
+                    // "의견 수렴 기간 : 2026.01.09.~2026.02.09."
+                    Pattern pattern = Pattern.compile("(\\d{4}\\.\\d{2}\\.\\d{2}\\.)");
+                    Matcher matcher = pattern.matcher(line);
+                    List<String> dates = new ArrayList<>();
+                    while (matcher.find()) dates.add(matcher.group(1));
+
+                    if (dates.size() >= 2) {
+                        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd.");
+                        startDate = LocalDate.parse(dates.get(0), formatter).atStartOfDay();
+                        endDate = LocalDate.parse(dates.get(1), formatter).atStartOfDay();
+                    }
+                    break;
+                }
+            }
+
+            // 4. 동의자 수 (Allows)
+            int allows = 0;
+            for (String line : lines) {
+                if (line.contains("의견이 총") && line.contains("건")) {
+                    String numStr = line.replaceAll("[^0-9]", "");
+                    if (!numStr.isEmpty()) allows = Integer.parseInt(numStr);
+                    break;
+                }
+            }
+
+            // 5. 본문 (Content)
+            String fullText = "";
+            try {
+                // 본문 영역은 여전히 Selector로 찾는 게 가장 깔끔함
+                List<String> contentSelectors = List.of(".view_cont", ".pet_content", ".content_view");
+                for (String selector : contentSelectors) {
+                    try {
+                        List<WebElement> els = driver.findElements(By.cssSelector(selector));
+                        if (!els.isEmpty()) {
+                            fullText = els.get(0).getText().trim();
+                            if (!fullText.isEmpty()) break;
+                        }
+                    } catch (Exception ignored) {}
+                }
+                // 실패시 전체 텍스트 사용 (이미 위에서 가져온 bodyText 활용)
+                if (fullText.isEmpty()) {
+                    fullText = bodyText;
+                    if (fullText.length() > 5000) fullText = fullText.substring(0, 5000);
+                }
+            } catch (Exception e) {
+                fullText = "본문 파싱 실패";
+            }
+
+            // 중복 검사
+            if (petitionRepo.findByTitle(title).isPresent()) {
+                log.info("이미 존재하는 청원 스킵: {}", title);
+                return;
+            }
+
+            // 6. GPT 분석
+            AiResponseDto aiData;
+            try {
+                aiData = gptService.analyzePetition(fullText);
+            } catch (Exception e) {
+                log.error("GPT 분석 실패. 기본값 저장.");
+                aiData = AiResponseDto.builder()
+                        .subTitle(title)
+                        .needs("분석 실패")
+                        .summary("AI 분석 실패")
+                        .positiveTags(List.of("분석 실패"))
+                        .negativeTags(List.of("분석 실패"))
+                        .laws(null)
+                        .build();
+            }
+
+            List<String> posTags = aiData.getPositiveTags() != null ? aiData.getPositiveTags() : new ArrayList<>();
+            List<String> negTags = aiData.getNegativeTags() != null ? aiData.getNegativeTags() : new ArrayList<>();
+
+            // 7. DB 저장
+            Petition petition = Petition.builder()
+                    .title(title)
+                    .subTitle(aiData.getSubTitle())
+                    .category("기타")
+                    .voteStartDate(startDate)
+                    .voteEndDate(endDate)
+                    .allows(allows)
+                    .type(0)
+                    .status(0)
+                    .result("-")
+                    .department(department)
+                    .finalDate(null)
+                    .good(0)
+                    .bad(0)
+                    .url(targetUrl)
+                    .petitionNeeds(aiData.getNeeds())
+                    .petitionSummary(aiData.getSummary())
+                    .positiveEx(String.join(",", posTags))
+                    .negativeEx(String.join(",", negTags))
+                    .build();
+
+            Petition saved = petitionRepo.save(petition);
+            log.info("청원24 저장 완료: {} (ID: {})", saved.getTitle(), saved.getId());
+
+            if (aiData.getLaws() != null) {
+                for (AiResponseDto.LawDto lawDto : aiData.getLaws()) {
+                    Laws law = lawsRepo.findByTitle(lawDto.getName())
+                            .orElseGet(() -> lawsRepo.save(Laws.builder()
+                                    .title(lawDto.getName()).summary(lawDto.getContent()).build()));
+                    lawsLinkRepo.save(LawsLink.builder().petId(saved.getId()).lawId(law.getId()).build());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("청원24 처리 중 오류 발생", e);
+        } finally {
+            driver.quit();
+        }
+    }
+
+    // ======================================================================
     // Helper Methods: API 및 공통 처리
     // ======================================================================
 
