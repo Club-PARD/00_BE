@@ -4,12 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.youngyoung.server.mora.client.OpenAssemblyClient;
 import com.youngyoung.server.mora.dto.AiResponseDto;
 import com.youngyoung.server.mora.dto.OpenApiDto;
-import com.youngyoung.server.mora.entity.Laws;
-import com.youngyoung.server.mora.entity.LawsLink;
-import com.youngyoung.server.mora.entity.Petition;
-import com.youngyoung.server.mora.repo.LawsLinkRepo;
-import com.youngyoung.server.mora.repo.LawsRepo;
-import com.youngyoung.server.mora.repo.PetitionRepo;
+import com.youngyoung.server.mora.entity.*;
+import com.youngyoung.server.mora.repo.*;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -34,10 +30,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -52,6 +45,8 @@ public class PetitionBatchTestService {
     private final OpenAssemblyClient openAssemblyClient;
     private final GptService gptService;
     private final ObjectMapper objectMapper;
+    private final UserRepo userRepo;
+    private final ScrapRepo scrapRepo;
 
     @Value("${open-api.assembly.key}")
     private String assemblyApiKey;
@@ -230,6 +225,63 @@ public class PetitionBatchTestService {
             log.error("엑셀 배치 작업 중 오류", e);
         } finally {
             driver.quit();
+        }
+    }
+
+    // ======================================================================
+    // 4. [테스트용] 이메일 발송 테스트 데이터 리셋
+    // 설명: 유저의 스크랩 목록 중 '완료된(결과가 나온)' 청원을 찾아 '결과 없음(-)'으로 되돌림
+    // ======================================================================
+    @Transactional
+    public String resetPetitionForEmailTest(String email) {
+        // 1. 유저 찾기
+        User user = userRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("해당 이메일의 유저를 찾을 수 없습니다: " + email));
+
+        // 2. 해당 유저의 스크랩 목록 조회 (Scrap 엔티티 리스트)
+        List<Scrap> scraps = scrapRepo.findAllByUserId(user.getId());
+
+        if (scraps.isEmpty()) {
+            return "실패: [" + email + "] 유저는 스크랩한 청원이 없습니다.";
+        }
+
+        Petition target = null;
+        String originalResult = "";
+
+        // 3. 스크랩한 청원 ID들로 실제 청원을 조회하여 조건 검사
+        for (Scrap scrap : scraps) {
+            Long petId = scrap.getPetId(); // Entity 구조상 getPetId() 사용
+
+            // 청원 조회
+            Optional<Petition> petOpt = Optional.ofNullable(petitionRepo.findById(petId));
+            if (petOpt.isEmpty()) continue;
+
+            Petition p = petOpt.get();
+
+            // 조건: status가 1이고, result가 "-"가 아닌 것 (이미 결과가 나온 것)
+            if (p.getStatus() == 1 && p.getResult() != null && !p.getResult().equals("-")) {
+                target = p;
+                originalResult = p.getResult();
+                break; // 하나만 찾으면 됨
+            }
+        }
+
+        // 4. 데이터 초기화 (배치가 다시 업데이트하도록 유도)
+        if (target != null) {
+            target.updateResult("-"); // 결과를 다시 "-"로 초기화
+            // status는 1 그대로 유지 (완료/진행 구분 없이 1로 쓰기로 했으므로)
+
+            // 안전장치: finalDate(회부일)가 없거나 미래라면, 배치가 조회를 안 할 수 있으므로 과거로 강제 설정
+            if (target.getFinalDate() == null || target.getFinalDate().isAfter(LocalDateTime.now())) {
+                target.updateFinalDateAndDept(LocalDateTime.now().minusDays(1), target.getDepartment());
+            }
+
+            petitionRepo.save(target);
+            log.info("이메일 테스트 준비 완료: 청원[{}] (원래결과: {} -> 초기화됨)", target.getTitle(), originalResult);
+
+            return "테스트 준비 완료! 대상 청원: [" + target.getTitle() + "]. 이제 /test/batch 를 실행하면 이메일이 발송됩니다.";
+        } else {
+            return "실패: [" + email + "] 님이 스크랩한 청원 중 '이미 처리된(결과가 나온)' 청원이 없습니다. 먼저 /test/processedBatch 로 데이터를 만들고 스크랩해주세요.";
         }
     }
 

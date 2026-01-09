@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -43,5 +44,12 @@ public class TestController {
     public String triggerExcelTop40() {
         petitionBatchTestService.createFromExcelTop40();
         return "엑셀 상위 40개 데이터 수집 및 저장 완료!";
+    }
+
+    // 5. 이메일 발송 테스트를 위한 데이터 초기화 API
+    // 사용법: /test/prepare-email?email=my@gmail.com
+    @GetMapping("/prepare-email")
+    public String prepareEmailTest(@RequestParam("email") String email) {
+        return petitionBatchTestService.resetPetitionForEmailTest(email);
     }
 }
