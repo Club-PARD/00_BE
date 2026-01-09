@@ -64,6 +64,64 @@
 
 <br>
 
+## 🎶 ERD 소개
+<img width="1114" height="930" alt="image" src="https://github.com/user-attachments/assets/4f8e9db4-98e2-4ece-b7cf-c546d27faeea" />
+
+- **Petition**
+- id: Long (not null, unique)
+- title: String (not null, unique)
+- type: Integer (not null) → 청원24, 국민동의청원 / 0,1
+- status: Integer (not null)  → 0,1 (진행, 종료)
+- subTitle: String (not null)
+- petitionNeeds: String (not null)
+- petitionSummary: String (not null)
+- result: String (not null)
+- category: String (not null) → 무슨 분야인지
+- finalDate: LocalDateTime
+- voteStartDate: LocalDateTime (not null)
+- voteEndDate: LocalDateTime (not null)
+- positiveEx: String (not null)
+- negativeEx: String (not null)
+- good: Integer (not null) → 좋아요
+- bad: Integer (not null) → 싫어요
+- allows: Integer (not null) → 동의자 수(매일 업데이트)
+- url: String (not null)
+- department: String (not null) → 소관위
+  
+- **Laws**
+- id: Long (not null, unique)
+- title: String (not null, unique)
+- summary: String(not null)
+- **LawsLink
+- id: Long (pk)
+- petId: UUID (not null)
+- lawId: Long (not null)
+  
+- **User**
+- id: UUID (unique, not null)
+- name: String (unique, not null)
+- email: String (not null, unique)
+- age: Integer (not null)
+- status: Integer (not null) → 4가지 상태
+  
+- **Scrap**
+- id: Long (pk)
+- petId: Long (not null)
+- userId: UUID (not null)
+  
+- **Comment**
+- id: Long (not null,unique)
+- petId: Long (not null)
+- userId: UUID (not null)
+- body: String (not null)
+  
+- **Likes**
+- id: Long (pk)
+- petId: Long (not null)
+- userId: UUID (not null, unique)
+- like: Integer (not null) → 싫어요, 좋아요 / -1,1
+
+
 ## 💡 기술적 도전 및 해결 (Technical Highlights)
 
 ### 1. 동적 DOM 구조의 '청원24' 크롤링 정밀화
@@ -195,3 +253,4 @@ Swagger UI를 통해 모든 API 엔드포인트와 명세를 확인할 수 있�
     - `GET /me`: 내 정보 조회
     - `GET /scrap`: 스크랩한 청원 조회
     - `DELETE /delete`: 회원 탈퇴
+ 
