@@ -12,11 +12,11 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OpenApiDto {
 
-    // 1. 계류현황 리스트 (메인 서비스에서 사용)
+    // 1. 계류현황 리스트
     @JsonProperty("nvqbafvaajdiqhehi")
     private List<HeadRowWrapper> pendingList;
 
-    // 2. 처리현황 리스트 (테스트 서비스 & 메인 서비스에서 사용)
+    // 2. 처리현황 리스트
     @JsonProperty("ncryefyuaflxnqbqo")
     private List<HeadRowWrapper> processedList;
 
@@ -33,6 +33,10 @@ public class OpenApiDto {
     public static class Row {
         @JsonProperty("BILL_NAME")
         private String billName;
+
+        // ★ [추가됨] 청원인 (예: "김태인외 50,060인")
+        @JsonProperty("PROPOSER")
+        private String proposer;
 
         @JsonProperty("CURR_COMMITTEE") // 소관위
         private String currCommittee;

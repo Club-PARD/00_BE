@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.youngyoung.server.mora.client.OpenAssemblyClient;
 import com.youngyoung.server.mora.dto.AiResponseDto;
 import com.youngyoung.server.mora.dto.OpenApiDto;
+import com.youngyoung.server.mora.dto.UserRes;
 import com.youngyoung.server.mora.entity.Laws;
 import com.youngyoung.server.mora.entity.LawsLink;
 import com.youngyoung.server.mora.entity.Petition;
+import com.youngyoung.server.mora.entity.Scrap;
 import com.youngyoung.server.mora.repo.LawsLinkRepo;
 import com.youngyoung.server.mora.repo.LawsRepo;
 import com.youngyoung.server.mora.repo.PetitionRepo;
+import com.youngyoung.server.mora.repo.ScrapRepo;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +56,8 @@ public class PetitionBatchService {
     private final GptService gptService;
     private final OpenAssemblyClient openAssemblyClient;
     private final ObjectMapper objectMapper;
+    private final ScrapRepo scrapRepo;
+    private final EmailService emailService;
 
     @Value("${open-api.assembly.key}")
     private String assemblyApiKey;
@@ -107,10 +112,16 @@ public class PetitionBatchService {
         for (Petition p : processingPetitions) {
             OpenApiDto.Row row = searchPetitionByAge(p.getTitle(), true);
             if (row != null && isValid(row.getProcResultCd())) {
+                String newResult = row.getProcResultCd();
+
                 p.updateResult(row.getProcResultCd());
+                p.updateResult(newResult);
                 //status 1로 고정
                 //p.updateStatus(2);
                 log.info("처리결과 추가 업데이트: [{}] -> {}", p.getTitle(), row.getProcResultCd());
+
+                //이 청원을 스크랩한 유저들에게 이메일 발송
+                sendEmailToScrappers(p, newResult);
             }
         }
     }
@@ -259,6 +270,28 @@ public class PetitionBatchService {
     }
 
     // --- Helpers ---
+
+    // 이메일 발송 헬퍼 메소드
+    private void sendEmailToScrappers(Petition p, String result) {
+        try {
+            // 해당 청원을 스크랩한 모든 목록 조회 (User 정보 포함 fetch join 권장)
+            List<UserRes.EmailInfo> scraps = scrapRepo.findEmailByPetId(p.getId());
+
+            if (scraps.isEmpty()) return;
+
+            log.info("청원 [{}] 업데이트 알림 발송 대상: {}명", p.getTitle(), scraps.size());
+
+            for (UserRes.EmailInfo user : scraps) {
+                String userEmail = user.getEmail();
+                String userName = user.getName(); // 또는 닉네임
+
+                // 비동기로 이메일 전송 (배치 속도 저하 없음)
+                emailService.sendUpdateNotification(userEmail, userName, p.getTitle(), result, p.getId());
+            }
+        } catch (Exception e) {
+            log.error("이메일 발송 중 오류 발생 (청원 ID: {})", p.getId(), e);
+        }
+    }
 
     private OpenApiDto.Row searchPetitionByAge(String title, boolean isProcessed) {
         OpenApiDto.Row row = searchApi(title, "22", isProcessed);

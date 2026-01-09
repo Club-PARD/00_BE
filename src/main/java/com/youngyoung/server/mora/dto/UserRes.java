@@ -34,4 +34,14 @@ public class UserRes {
         private LocalDateTime voteStartDate;
         private LocalDateTime voteEndDate;
     }
+
+    @Builder
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ToString
+    public static class EmailInfo{
+        private String name;
+        private String email;
+    }
 }

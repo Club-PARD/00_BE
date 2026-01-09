@@ -61,10 +61,10 @@ public class PetitionBatchTestService {
     // ======================================================================
     @Transactional
     public void createDummyProcessedPetitions() {
-        log.info(">>>> [TEST] 처리현황 API(21대) 5개 가져와서 '처리 전' 상태로 저장 시작");
+        log.info(">>>> [TEST] 처리현황 API(22대) 5개 가져와서 저장 시작");
         try {
             String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                    assemblyApiKey, "json", 1, 5, "21", "국민동의청원", null
+                    assemblyApiKey, "json", 1, 5, "22", "국민동의청원", null
             );
             processAndSaveTestPetitions(jsonResponse, true);
         } catch (Exception e) {
@@ -77,7 +77,7 @@ public class PetitionBatchTestService {
     // ======================================================================
     @Transactional
     public void createDummyPendingPetitions() {
-        log.info(">>>> [TEST] 계류현황 API 5개 가져와서 '소관위 미정' 상태로 저장 시작");
+        log.info(">>>> [TEST] 계류현황 API 5개 가져와서 저장 시작");
         try {
             String jsonResponse = openAssemblyClient.getPendingPetitions(
                     assemblyApiKey, "json", 1, 5, null, null
@@ -280,26 +280,40 @@ public class PetitionBatchTestService {
                 LocalDateTime endDate = parseDate(row.getCommitteeDt());
                 if (endDate == null) endDate = startDate.plusDays(30);
 
+                // 1. 소관위 (Department)
                 String department = row.getCurrCommittee();
                 if (department == null || department.isBlank() || department.equals("null")) {
                     department = "-";
                 }
 
+                // 2. 회부일 (FinalDate)
                 LocalDateTime finalDate = parseDate(row.getCommitteeDt());
                 if (isProcessedData && finalDate == null) {
                     finalDate = LocalDateTime.now().minusMonths(6);
                 }
 
+                // ★ [수정됨] 3. 결과 (Result) - API 값 사용
+                String result = row.getProcResultCd();
+                if (result == null || result.isBlank() || result.equals("null")) {
+                    result = "-";
+                }
+
+                // ★ [수정됨] 4. 동의자 수 (Allows) - "김태인외 50,060인" 파싱
+                int allows = extractAllowsFromProposer(row.getProposer());
+
+                // ★ [수정됨] 5. 카테고리 - "기타"로 변경
+                String category = "기타";
+
                 Petition petition = Petition.builder()
                         .title(row.getBillName())
                         .subTitle(aiData.getSubTitle())
-                        .category("기타(테스트)")
+                        .category(category) // 수정된 카테고리
                         .voteStartDate(startDate)
                         .voteEndDate(endDate)
-                        .allows(50000)
+                        .allows(allows) // 파싱된 동의자 수
                         .type(1)
                         .status(1)
-                        .result("-")
+                        .result(result) // 수정된 결과
                         .department(department)
                         .finalDate(finalDate)
                         .good(0)
@@ -312,7 +326,7 @@ public class PetitionBatchTestService {
                         .build();
 
                 petitionRepo.save(petition);
-                log.info("저장 완료: {}", petition.getTitle());
+                log.info("저장 완료: {} (동의: {}, 결과: {})", petition.getTitle(), allows, result);
 
                 if (aiData.getLaws() != null) {
                     for (AiResponseDto.LawDto lawDto : aiData.getLaws()) {
@@ -325,6 +339,19 @@ public class PetitionBatchTestService {
             }
         } finally {
             driver.quit();
+        }
+    }
+
+    // ★ [추가] 동의자 수 파싱 헬퍼 메소드
+    private int extractAllowsFromProposer(String proposer) {
+        if (proposer == null || proposer.isBlank()) return 0;
+        try {
+            // "김태인외 50,060인" -> "50060" 추출 (숫자만 남김)
+            String numberOnly = proposer.replaceAll("[^0-9]", "");
+            if (numberOnly.isBlank()) return 0;
+            return Integer.parseInt(numberOnly);
+        } catch (NumberFormatException e) {
+            return 0; // 파싱 실패 시 0 리턴
         }
     }
 

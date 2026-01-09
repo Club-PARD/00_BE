@@ -72,6 +72,9 @@ dependencies {
     // 엑셀 처리를 위한 Apache POI (필수)
     implementation 'org.apache.poi:poi:5.2.3'
     implementation 'org.apache.poi:poi-ooxml:5.2.3'
+
+    //email
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 }
 
 // 의존성 매니지먼트 추가

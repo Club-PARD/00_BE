@@ -19,6 +19,14 @@ public interface ScrapRepo extends JpaRepository<Scrap,Long> {
     void deleteByUserId(UUID myId);
 
     @Modifying
-    @Query("DELETE FROM Scrap s WHERE s.userId = :myId AND s.petId IN :id")
+    @Query("DELETE FROM Scrap s " +
+            "WHERE s.userId = :myId AND s.petId IN :id")
     void deleteByUserIdAndPetId(UUID myId, List<Long> id);
+
+    // 청원 ID로 스크랩한 유저들 다 찾기
+    @Query("SELECT new com.youngyoung.server.mora.dto.UserRes$EmailInfo(" +
+            "u.name, u.email ) "+
+            "FROM Scrap s JOIN User u ON s.userId = u.id " +
+            "WHERE s.petId = :petitionId")
+    List<UserRes.EmailInfo> findEmailByPetId(Long petitionId);
 }
