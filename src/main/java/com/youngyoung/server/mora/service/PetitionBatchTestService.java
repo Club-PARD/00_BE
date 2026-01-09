@@ -69,9 +69,9 @@ public class PetitionBatchTestService {
         try {
             // 처리현황 API는 파라미터로 "국민동의청원" 필터링 가능
             String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                    assemblyApiKey, "json", 1, 30, "22", "국민동의청원", null
+                    assemblyApiKey, "json", 1, 10, "22", "국민동의청원", null
             );
-            processAndSaveTestPetitions(jsonResponse, true, 30);
+            processAndSaveTestPetitions(jsonResponse, true, 5);
         } catch (Exception e) {
             log.error("처리현황 테스트 데이터 생성 중 오류", e);
         }
@@ -87,7 +87,7 @@ public class PetitionBatchTestService {
         try {
             // ★ [수정] 필터링을 위해 넉넉하게 50개를 가져옴 (파라미터로 필터링이 안 되므로)
             String jsonResponse = openAssemblyClient.getPendingPetitions(
-                    assemblyApiKey, "json", 1, 30, null, null
+                    assemblyApiKey, "json", 1, 50, null, null
             );
             // 내부 로직에서 "국민동의청원"인지 확인하고 30개만 저장
             processAndSaveTestPetitions(jsonResponse, false, 30);
@@ -468,9 +468,8 @@ public class PetitionBatchTestService {
     }
 
     // ======================================================================
-    // Helper Methods: API 및 공통 처리
+    // Helper Method: API 응답 처리 및 저장 (공통)
     // ======================================================================
-
     private void processAndSaveTestPetitions(String jsonResponse, boolean isProcessedData, int limitCount) throws Exception {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new");
@@ -479,6 +478,7 @@ public class PetitionBatchTestService {
         options.addArguments("--disable-gpu");
         options.addArguments("--lang=ko_KR");
         options.addArguments("--window-size=1920,1080");
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
         WebDriver driver = new ChromeDriver(options);
         int savedCount = 0;
@@ -496,21 +496,15 @@ public class PetitionBatchTestService {
             }
 
             for (OpenApiDto.Row row : rows) {
-                if (savedCount >= limitCount) {
-                    log.info("목표 개수 {}개를 채워 작업을 중단합니다.", limitCount);
-                    break;
-                }
+                if (savedCount >= limitCount) break;
 
-                // ★ [수정] 국민동의청원이 아니면 SKIP (계류/처리 모두 적용)
-                if (row.getApprover() != null && !row.getApprover().contains("국민동의청원")) {
-                    log.info("[SKIP] 국민동의청원이 아님: {} (구분: {})", row.getBillName(), row.getApprover());
-                    continue;
-                }
+                // ★ [로그 추가] API에서 날짜값이 어떻게 오는지 확인
+                log.info(">>>> [API 데이터 확인] 청원명: {}, 접수일(PROPOSE): {}, 회부일(COMMITTEE): {}",
+                        row.getBillName(), row.getProposeDt(), row.getCommitteeDt());
 
-                if (petitionRepo.findByTitle(row.getBillName()).isPresent()) {
-                    log.info("[SKIP] 이미 존재하는 데이터: {}", row.getBillName());
-                    continue;
-                }
+                // 국민동의청원 필터링
+                if (row.getApprover() != null && !row.getApprover().contains("국민동의청원")) continue;
+                if (petitionRepo.findByTitle(row.getBillName()).isPresent()) continue;
 
                 log.info("데이터 생성 중({}/{}): {}", savedCount + 1, limitCount, row.getBillName());
 
@@ -518,15 +512,30 @@ public class PetitionBatchTestService {
                         ? row.getLinkUrl() : "https://petitions.assembly.go.kr";
 
                 driver.get(targetUrl);
-                Thread.sleep(1500);
+                Thread.sleep(1500); // 로딩 대기
+
+                // 1. 본문 추출
                 String fullText = extractPetitionContent(driver);
                 if (fullText.isBlank()) fullText = "테스트용 임시 본문입니다. " + row.getBillName();
 
-                AiResponseDto aiData = gptService.analyzePetition(fullText);
+                // 2. ★ [추가] 청원 기간(Vote Date) 크롤링
+                LocalDateTime[] voteDates = extractVoteDates(driver);
 
+                // 기본값 (API 데이터) 설정
                 LocalDateTime startDate = parseDate(row.getProposeDt());
                 LocalDateTime endDate = parseDate(row.getCommitteeDt());
-                if (endDate == null) endDate = startDate.plusDays(30);
+                if (endDate == null && startDate != null) endDate = startDate.plusDays(30);
+
+                // 크롤링 성공 시 덮어쓰기
+                if (voteDates != null) {
+                    startDate = voteDates[0];
+                    endDate = voteDates[1];
+                    log.info("청원기간 크롤링 성공: {} ~ {}", startDate.toLocalDate(), endDate.toLocalDate());
+                } else {
+                    log.warn("청원기간 크롤링 실패 -> API 데이터 대체 사용");
+                }
+
+                AiResponseDto aiData = gptService.analyzePetition(fullText);
 
                 String department = row.getCurrCommittee();
                 if (department == null || department.isBlank() || department.equals("null")) {
@@ -538,24 +547,20 @@ public class PetitionBatchTestService {
                     finalDate = LocalDateTime.now().minusMonths(6);
                 }
 
-                // ★ [수정] 결과값 반영
                 String result = row.getProcResultCd();
                 if (result == null || result.isBlank() || result.equals("null")) {
                     result = "-";
                 }
 
-                // ★ [수정] 동의자 수 파싱
                 int allows = extractAllowsFromProposer(row.getProposer());
-
-                // ★ [수정] 카테고리 "기타"
                 String category = "기타";
 
                 Petition petition = Petition.builder()
                         .title(row.getBillName())
                         .subTitle(aiData.getSubTitle())
                         .category(category)
-                        .voteStartDate(startDate)
-                        .voteEndDate(endDate)
+                        .voteStartDate(startDate) // 크롤링된 날짜 적용
+                        .voteEndDate(endDate)     // 크롤링된 날짜 적용
                         .allows(allows)
                         .type(1)
                         .status(1)
@@ -573,7 +578,7 @@ public class PetitionBatchTestService {
 
                 petitionRepo.save(petition);
                 savedCount++;
-                log.info("저장 완료: {} (동의: {}, 결과: {})", petition.getTitle(), allows, result);
+                log.info("저장 완료: {} (동의: {}, 기간: {}~{})", petition.getTitle(), allows, startDate.toLocalDate(), endDate.toLocalDate());
 
                 if (aiData.getLaws() != null) {
                     for (AiResponseDto.LawDto lawDto : aiData.getLaws()) {
@@ -588,8 +593,6 @@ public class PetitionBatchTestService {
             driver.quit();
         }
     }
-
-    // --- Helpers ---
 
     private int extractAllowsFromProposer(String proposer) {
         if (proposer == null || proposer.isBlank()) return 0;
@@ -678,5 +681,33 @@ public class PetitionBatchTestService {
             if (mapKey.contains(normalizedExcelTitle) || normalizedExcelTitle.contains(mapKey)) return map.get(mapKey);
         }
         return null;
+    }
+
+    // 청원24 상세 페이지에서 "청원기간" 추출
+    private LocalDateTime[] extractVoteDates(WebDriver driver) {
+        try {
+            // 1. 페이지 전체 텍스트 가져오기
+            String bodyText = driver.findElement(By.tagName("body")).getText();
+
+            // 2. 날짜 패턴 찾기 (YYYY-MM-DD ~ YYYY-MM-DD)
+            // 예: "청원기간 2025-03-17 ~ 2025-04-16"
+            Pattern pattern = Pattern.compile("(\\d{4}-\\d{2}-\\d{2})\\s*~\\s*(\\d{4}-\\d{2}-\\d{2})");
+            Matcher matcher = pattern.matcher(bodyText);
+
+            if (matcher.find()) {
+                String startStr = matcher.group(1); // 첫 번째 날짜
+                String endStr = matcher.group(2);   // 두 번째 날짜
+
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+                return new LocalDateTime[] {
+                        LocalDate.parse(startStr, formatter).atStartOfDay(),
+                        LocalDate.parse(endStr, formatter).atStartOfDay()
+                };
+            }
+        } catch (Exception e) {
+            log.warn("청원기간 파싱 중 오류 발생: {}", e.getMessage());
+        }
+        return null; // 파싱 실패 시 null 반환
     }
 }

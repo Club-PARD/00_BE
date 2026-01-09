@@ -75,6 +75,7 @@ public class UserService {
         return scrapRepo.findByUserId(myId);
     }
 
+    @Transactional
     public void deleteUser(UUID myId) {
         likesRepo.deleteByUserId(myId);
         scrapRepo.deleteByUserId(myId);
