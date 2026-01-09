@@ -28,14 +28,14 @@ public class TestController {
     @GetMapping("/processedBatch")
     public String triggerProcessedBatch() {
         petitionBatchTestService.createDummyProcessedPetitions();
-        return "처리현황 테스트 데이터 5개 생성 완료!";
+        return "처리현황 테스트 데이터 생성을 '백그라운드'에서 시작했습니다! (완료 여부는 서버 로그를 확인하세요)";
     }
 
     // 3. 계류현황 테스트 데이터 생성 (API)
     @GetMapping("/pendingBatch")
     public String triggerPendingBatch() {
         petitionBatchTestService.createDummyPendingPetitions();
-        return "계류현황 테스트 데이터 5개 생성 완료!";
+        return "계류현황 테스트 데이터 생성을 '백그라운드'에서 시작했습니다! (완료 여부는 서버 로그를 확인하세요)";
     }
 
     // 4. 엑셀 상위 40개 크롤링 및 저장

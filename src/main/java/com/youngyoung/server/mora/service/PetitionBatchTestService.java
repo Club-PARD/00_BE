@@ -25,6 +25,7 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,7 @@ public class PetitionBatchTestService {
     // ======================================================================
     // 1. [테스트용] 처리현황 데이터 생성 (API)
     // ======================================================================
+    @Async
     @Transactional
     public void createDummyProcessedPetitions() {
         log.info(">>>> [TEST] 처리현황 API(21대) 30개 가져와서 저장 시작");
@@ -75,6 +77,7 @@ public class PetitionBatchTestService {
     // ======================================================================
     // 2. [테스트용] 계류현황 데이터 생성 (API)
     // ======================================================================
+    @Async
     @Transactional
     public void createDummyPendingPetitions() {
         log.info(">>>> [TEST] 계류현황 API 30개 가져와서 저장 시작");
@@ -91,6 +94,7 @@ public class PetitionBatchTestService {
     // ======================================================================
     // 3. [테스트용] 엑셀 상위 40개 가져오기 (크롤링 + GPT 포함)
     // ======================================================================
+    @Async
     @Transactional
     public void createFromExcelTop40() {
         log.info(">>>> [TEST] 엑셀 다운로드 후 상위 40개 데이터 수집 시작");
