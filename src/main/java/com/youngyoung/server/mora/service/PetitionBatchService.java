@@ -94,10 +94,14 @@ public class PetitionBatchService {
                 if (row != null) {
                     updateCommitteeInfo(p, row, "처리현황");
                     String result = row.getProcResultCd();
+
                     if (isValid(result)) {
                         p.updateResult(result);
-                        p.updateStatus(2);
+                        // p.updateStatus(2); // (상태값 정책에 따라 주석 유지 or 해제)
                         log.info(" >> 처리결과 동시 업데이트 완료: {}", result);
+
+                        // (계류 중 -> 처리 완료로 상태가 변했으므로) 이메일
+                        sendEmailToScrappers(p, result);
                     }
                 } else {
                     log.info("API 결과 없음 (계류/처리 모두 부재): [{}]", title);

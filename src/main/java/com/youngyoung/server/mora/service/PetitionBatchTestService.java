@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.youngyoung.server.mora.client.OpenAssemblyClient;
 import com.youngyoung.server.mora.dto.AiResponseDto;
 import com.youngyoung.server.mora.dto.OpenApiDto;
-import com.youngyoung.server.mora.entity.*;
+import com.youngyoung.server.mora.entity.Laws;
+import com.youngyoung.server.mora.entity.LawsLink;
+import com.youngyoung.server.mora.entity.Petition;
+import com.youngyoung.server.mora.entity.Scrap;
+import com.youngyoung.server.mora.entity.User;
 import com.youngyoung.server.mora.repo.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -31,7 +35,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,58 +50,60 @@ public class PetitionBatchTestService {
     private final PetitionRepo petitionRepo;
     private final LawsRepo lawsRepo;
     private final LawsLinkRepo lawsLinkRepo;
+    private final UserRepo userRepo;
+    private final ScrapRepo scrapRepo;
     private final OpenAssemblyClient openAssemblyClient;
     private final GptService gptService;
     private final ObjectMapper objectMapper;
-    private final UserRepo userRepo;
-    private final ScrapRepo scrapRepo;
 
     @Value("${open-api.assembly.key}")
     private String assemblyApiKey;
 
     // ======================================================================
-    // 1. [테스트용] 처리현황 데이터 생성 (API)
+    // 1. [테스트용] 처리현황 데이터 생성 (API) - 비동기
     // ======================================================================
     @Async
     @Transactional
     public void createDummyProcessedPetitions() {
-        log.info(">>>> [TEST] 처리현황 API(21대) 30개 가져와서 저장 시작");
+        log.info(">>>> [TEST] 처리현황 API(22대) 가져와서 저장 시작 (비동기)");
         try {
+            // 처리현황 API는 파라미터로 "국민동의청원" 필터링 가능
             String jsonResponse = openAssemblyClient.getProcessedPetitions(
-                    assemblyApiKey, "json", 1, 30, "21", "국민동의청원", null
+                    assemblyApiKey, "json", 1, 10, "22", "국민동의청원", null
             );
-            processAndSaveTestPetitions(jsonResponse, true);
+            processAndSaveTestPetitions(jsonResponse, true, 5);
         } catch (Exception e) {
             log.error("처리현황 테스트 데이터 생성 중 오류", e);
         }
     }
 
     // ======================================================================
-    // 2. [테스트용] 계류현황 데이터 생성 (API)
+    // 2. [테스트용] 계류현황 데이터 생성 (API) - 비동기 & 필터링 강화
     // ======================================================================
     @Async
     @Transactional
     public void createDummyPendingPetitions() {
-        log.info(">>>> [TEST] 계류현황 API 30개 가져와서 저장 시작");
+        log.info(">>>> [TEST] 계류현황 API 가져와서 '국민동의청원'만 골라 저장 시작 (비동기)");
         try {
+            // ★ [수정] 필터링을 위해 넉넉하게 50개를 가져옴 (파라미터로 필터링이 안 되므로)
             String jsonResponse = openAssemblyClient.getPendingPetitions(
-                    assemblyApiKey, "json", 1, 30, null, null
+                    assemblyApiKey, "json", 1, 50, null, null
             );
-            processAndSaveTestPetitions(jsonResponse, false);
+            // 내부 로직에서 "국민동의청원"인지 확인하고 5개만 저장
+            processAndSaveTestPetitions(jsonResponse, false, 5);
         } catch (Exception e) {
             log.error("계류현황 테스트 데이터 생성 중 오류", e);
         }
     }
 
     // ======================================================================
-    // 3. [테스트용] 엑셀 상위 40개 가져오기 (크롤링 + GPT 포함)
+    // 3. [테스트용] 엑셀 상위 40개 가져오기 (크롤링 + GPT 포함) - 비동기
     // ======================================================================
     @Async
     @Transactional
     public void createFromExcelTop40() {
-        log.info(">>>> [TEST] 엑셀 다운로드 후 상위 40개 데이터 수집 시작");
+        log.info(">>>> [TEST] 엑셀 다운로드 후 상위 40개 데이터 수집 시작 (비동기)");
 
-        // Selenium 설정
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new");
         options.addArguments("--no-sandbox");
@@ -130,7 +139,7 @@ public class PetitionBatchTestService {
             File excelFile = new File(downloadPath, "진행중청원 목록.xlsx");
             waitForFileDownload(excelFile, 30);
 
-            // 2. 엑셀 파싱 및 상위 40개 필터링
+            // 2. 엑셀 파싱
             List<ExcelRowDto> allPetitions = parseExcelAll(excelFile);
             List<ExcelRowDto> top40Petitions = allPetitions.stream().limit(40).toList();
             log.info("엑셀 파싱 완료. 상위 {}개 데이터를 처리합니다.", top40Petitions.size());
@@ -171,7 +180,7 @@ public class PetitionBatchTestService {
                 String fullText = extractPetitionContent(driver);
                 if (fullText.isBlank()) continue;
 
-                // ★ GPT 분석 (안전 처리)
+                // GPT 분석 (안전 처리)
                 AiResponseDto aiData;
                 try {
                     aiData = gptService.analyzePetition(fullText);
@@ -181,8 +190,8 @@ public class PetitionBatchTestService {
                             .subTitle(dto.getTitle())
                             .needs("분석 실패: 원문을 확인해주세요.")
                             .summary("AI 분석 실패")
-                            .positiveTags(List.of("분석 실패/잠시 후 다시 시도해주세요"))
-                            .negativeTags(List.of("분석 실패/잠시 후 다시 시도해주세요"))
+                            .positiveTags(List.of("분석 실패"))
+                            .negativeTags(List.of("분석 실패"))
                             .laws(null)
                             .build();
                 }
@@ -234,17 +243,13 @@ public class PetitionBatchTestService {
 
     // ======================================================================
     // 4. [테스트용] 이메일 발송 테스트 데이터 리셋
-    // 설명: 유저의 스크랩 목록 중 '완료된(결과가 나온)' 청원을 찾아 '결과 없음(-)'으로 되돌림
     // ======================================================================
     @Transactional
     public String resetPetitionForEmailTest(String email) {
-        // 1. 유저 찾기
         User user = userRepo.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("해당 이메일의 유저를 찾을 수 없습니다: " + email));
 
-        // 2. 해당 유저의 스크랩 목록 조회 (Scrap 엔티티 리스트)
         List<Scrap> scraps = scrapRepo.findAllByUserId(user.getId());
-
         if (scraps.isEmpty()) {
             return "실패: [" + email + "] 유저는 스크랩한 청원이 없습니다.";
         }
@@ -252,48 +257,40 @@ public class PetitionBatchTestService {
         Petition target = null;
         String originalResult = "";
 
-        // 3. 스크랩한 청원 ID들로 실제 청원을 조회하여 조건 검사
         for (Scrap scrap : scraps) {
-            Long petId = scrap.getPetId(); // Entity 구조상 getPetId() 사용
+            // Scrap 엔티티에는 연관관계가 없으므로 ID로 다시 조회
+            Long petId = scrap.getPetId();
+            Petition p = petitionRepo.findById(petId);
 
-            // 청원 조회
-            Optional<Petition> petOpt = Optional.ofNullable(petitionRepo.findById(petId));
-            if (petOpt.isEmpty()) continue;
-
-            Petition p = petOpt.get();
-
-            // 조건: status가 1이고, result가 "-"가 아닌 것 (이미 결과가 나온 것)
-            if (p.getStatus() == 1 && p.getResult() != null && !p.getResult().equals("-")) {
+            if (p != null && p.getStatus() == 1 && p.getResult() != null && !p.getResult().equals("-")) {
                 target = p;
                 originalResult = p.getResult();
-                break; // 하나만 찾으면 됨
+                break;
             }
         }
 
-        // 4. 데이터 초기화 (배치가 다시 업데이트하도록 유도)
         if (target != null) {
-            target.updateResult("-"); // 결과를 다시 "-"로 초기화
-            // status는 1 그대로 유지 (완료/진행 구분 없이 1로 쓰기로 했으므로)
+            target.updateResult("-");
+            // status는 1 유지
 
-            // 안전장치: finalDate(회부일)가 없거나 미래라면, 배치가 조회를 안 할 수 있으므로 과거로 강제 설정
+            // finalDate가 미래면 배치가 조회 안 하므로 과거로 변경
             if (target.getFinalDate() == null || target.getFinalDate().isAfter(LocalDateTime.now())) {
                 target.updateFinalDateAndDept(LocalDateTime.now().minusDays(1), target.getDepartment());
             }
 
             petitionRepo.save(target);
             log.info("이메일 테스트 준비 완료: 청원[{}] (원래결과: {} -> 초기화됨)", target.getTitle(), originalResult);
-
-            return "테스트 준비 완료! 대상 청원: [" + target.getTitle() + "]. 이제 /test/batch 를 실행하면 이메일이 발송됩니다.";
+            return "테스트 준비 완료! 청원명: [" + target.getTitle() + "]. 이제 /test/batch 를 실행하세요.";
         } else {
-            return "실패: [" + email + "] 님이 스크랩한 청원 중 '이미 처리된(결과가 나온)' 청원이 없습니다. 먼저 /test/processedBatch 로 데이터를 만들고 스크랩해주세요.";
+            return "실패: [" + email + "] 님이 스크랩한 청원 중 '이미 처리된' 청원이 없습니다.";
         }
     }
 
     // ======================================================================
-    // Helper Methods
+    // Helper Methods: API 및 공통 처리
     // ======================================================================
 
-    private void processAndSaveTestPetitions(String jsonResponse, boolean isProcessedData) throws Exception {
+    private void processAndSaveTestPetitions(String jsonResponse, boolean isProcessedData, int limitCount) throws Exception {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new");
         options.addArguments("--no-sandbox");
@@ -303,6 +300,7 @@ public class PetitionBatchTestService {
         options.addArguments("--window-size=1920,1080");
 
         WebDriver driver = new ChromeDriver(options);
+        int savedCount = 0;
 
         try {
             OpenApiDto dto = objectMapper.readValue(jsonResponse, OpenApiDto.class);
@@ -317,10 +315,23 @@ public class PetitionBatchTestService {
             }
 
             for (OpenApiDto.Row row : rows) {
-                if (petitionRepo.findByTitle(row.getBillName()).isPresent()) {
-                    log.info("이미 존재하는 데이터 스킵: {}", row.getBillName());
+                if (savedCount >= limitCount) {
+                    log.info("목표 개수 {}개를 채워 작업을 중단합니다.", limitCount);
+                    break;
+                }
+
+                // ★ [수정] 국민동의청원이 아니면 SKIP (계류/처리 모두 적용)
+                if (row.getApprover() != null && !row.getApprover().contains("국민동의청원")) {
+                    log.info("[SKIP] 국민동의청원이 아님: {} (구분: {})", row.getBillName(), row.getApprover());
                     continue;
                 }
+
+                if (petitionRepo.findByTitle(row.getBillName()).isPresent()) {
+                    log.info("[SKIP] 이미 존재하는 데이터: {}", row.getBillName());
+                    continue;
+                }
+
+                log.info("데이터 생성 중({}/{}): {}", savedCount + 1, limitCount, row.getBillName());
 
                 String targetUrl = (row.getLinkUrl() != null && !row.getLinkUrl().isEmpty())
                         ? row.getLinkUrl() : "https://petitions.assembly.go.kr";
@@ -336,40 +347,38 @@ public class PetitionBatchTestService {
                 LocalDateTime endDate = parseDate(row.getCommitteeDt());
                 if (endDate == null) endDate = startDate.plusDays(30);
 
-                // 1. 소관위 (Department)
                 String department = row.getCurrCommittee();
                 if (department == null || department.isBlank() || department.equals("null")) {
                     department = "-";
                 }
 
-                // 2. 회부일 (FinalDate)
                 LocalDateTime finalDate = parseDate(row.getCommitteeDt());
                 if (isProcessedData && finalDate == null) {
                     finalDate = LocalDateTime.now().minusMonths(6);
                 }
 
-                // ★ [수정됨] 3. 결과 (Result) - API 값 사용
+                // ★ [수정] 결과값 반영
                 String result = row.getProcResultCd();
                 if (result == null || result.isBlank() || result.equals("null")) {
                     result = "-";
                 }
 
-                // 4. 동의자 수 (Allows) - "김태인외 50,060인" 파싱
+                // ★ [수정] 동의자 수 파싱
                 int allows = extractAllowsFromProposer(row.getProposer());
 
-                // 5. 카테고리 - "기타"로 변경
+                // ★ [수정] 카테고리 "기타"
                 String category = "기타";
 
                 Petition petition = Petition.builder()
                         .title(row.getBillName())
                         .subTitle(aiData.getSubTitle())
-                        .category(category) // 수정된 카테고리
+                        .category(category)
                         .voteStartDate(startDate)
                         .voteEndDate(endDate)
-                        .allows(allows) // 파싱된 동의자 수
+                        .allows(allows)
                         .type(1)
                         .status(1)
-                        .result(result) // 수정된 결과
+                        .result(result)
                         .department(department)
                         .finalDate(finalDate)
                         .good(0)
@@ -382,6 +391,7 @@ public class PetitionBatchTestService {
                         .build();
 
                 petitionRepo.save(petition);
+                savedCount++;
                 log.info("저장 완료: {} (동의: {}, 결과: {})", petition.getTitle(), allows, result);
 
                 if (aiData.getLaws() != null) {
@@ -398,16 +408,16 @@ public class PetitionBatchTestService {
         }
     }
 
-    // 동의자 수 파싱 헬퍼 메소드
+    // --- Helpers ---
+
     private int extractAllowsFromProposer(String proposer) {
         if (proposer == null || proposer.isBlank()) return 0;
         try {
-            // "김태인외 50,060인" -> "50060" 추출 (숫자만 남김)
             String numberOnly = proposer.replaceAll("[^0-9]", "");
             if (numberOnly.isBlank()) return 0;
             return Integer.parseInt(numberOnly);
         } catch (NumberFormatException e) {
-            return 0; // 파싱 실패 시 0 리턴
+            return 0;
         }
     }
 
@@ -489,5 +499,3 @@ public class PetitionBatchTestService {
         return null;
     }
 }
-
-// (ExcelRowDto는 파일 맨 아래나 별도 파일에 위치)
