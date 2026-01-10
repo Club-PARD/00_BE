@@ -17,10 +17,4 @@ public class Scheduler {
         petitionBatchService.runBatch();
     }
 
-    // ★ 추가: 서버 시작되자마자 테스트로 한 번 실행!
-//    @PostConstruct
-//    public void initTest() {
-//        System.out.println("서버 시작! 테스트용 배치 즉시 실행...");
-//        petitionBatchService.runBatch();
-//    }
 }

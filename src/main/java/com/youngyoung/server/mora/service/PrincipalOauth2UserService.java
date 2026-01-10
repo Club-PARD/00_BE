@@ -43,7 +43,7 @@ public class PrincipalOauth2UserService extends DefaultOAuth2UserService {
         } else {
             log.info("신규 회원 감지 (DB 저장 안함): {}", email);
 
-            // ⭐️ 중요: DB에 저장하지 않습니다!
+            // DB에 저장하지 않습니다!
             // ID는 null로, isNew는 true로 설정해서 보냅니다.
             return new SessionUser(null, email, true, attributes);
         }

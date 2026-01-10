@@ -16,7 +16,7 @@ public class EmailService {
 
     private final JavaMailSender javaMailSender;
 
-    // ★ 비동기 처리: 배치가 이메일 발송을 기다리지 않고 다음 로직으로 넘어감
+    // 비동기 처리: 배치가 이메일 발송을 기다리지 않고 다음 로직으로 넘어감
     @Async
     public void sendUpdateNotification(String toEmail, String userName, String petitionTitle, String result, Long petitionId) {
         MimeMessage mimeMessage = javaMailSender.createMimeMessage();
